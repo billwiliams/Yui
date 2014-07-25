@@ -70,23 +70,23 @@ YUI().use('node', function(Y) {
 
 //Album download
 function downloadAlbum(album) {
-	consolePrintln('Requesting Download: <span style="color:#8FF;">'+ album +'</span>');
+	consolePrintln('[Log] Requesting Download: <span style="color:#8FF;">'+ album +'</span>');
 	socket.emit("request download", album);
 }
 socket.on("download link", function(data) {
 	if(data.path === 'rejected') {
-		consolePrintln('<span style="color:#FAA;">Download Request Rejected!</span>');
+		consolePrintln('[Error] <span style="color:#FAA;">Download Request Rejected!</span>');
 	} else if(data.path === 'preparing') {
-		consolePrintln('<span style="color:#FA0;">Please wait while previous download is prepared...</span>');
+		consolePrintln('[Warning] <span style="color:#FA0;">Please wait while previous download is prepared...</span>');
 	} else {
-		consolePrintln('Acquired Album: <span style="color:#8FF;">'+ data.album +'</span>');
+		consolePrintln('[Log] Acquired Album: <span style="color:#8FF;">'+ data.album +'</span>');
 		document.getElementById('downloader').src = location.href+data.path;
 	}
 })
 
 //Play new song
 function PlaySong(id, title) {
-	consolePrintln('Requesting Song: <span style="color:#8FF;">'+ title +'</span>');
+	consolePrintln('[Log] Requesting Song: <span style="color:#8FF;">'+ title +'</span>');
 	YUI().use('node', function(Y) {
 		var active = Y.one('.track-active')
 		if(active) active.removeClass('track-active');
@@ -151,7 +151,7 @@ socket.on('track info', function(meta) {
 })
 //Track URL for player
 socket.on('track data', function(data) {
-	consolePrintln('Acquired Song: <span style="color:#8FF;">'+ data.title +'</span>');
+	consolePrintln('[Log] Acquired Song: <span style="color:#8FF;">'+ data.title +'</span>');
 	player.src = 'dat/'+data.file;
 	player.load();
 });
