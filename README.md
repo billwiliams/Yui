@@ -26,13 +26,10 @@ Example settings.json content:<br />
 "imgDir" is where all the album artwork will be stored.<br />
 
 ##Usage:<br />
-To build the music database for the first time, use:
-```node main.js (-b|-build)```<br />
-To update database with new or removed files, use:
-```node main.js (-u|-update)```<br />
-To start using player, use:
-```node main.js```
+To build the music database for the first time, use: `node main.js (-b|-build)`<br />
+To update database with new or removed files, use: `node main.js (-u|-update)`<br />
+To start using player, use: `node main.js`
 
 ##Audio Files:<br />
-Supported formats: `mp3|m4a|aiff|aac|flac|wav|ape|ogg`
+Supported formats: `mp3|m4a|aiff|aac|flac|wav|ape|ogg`<br />
 Audio files should be properly tagged, this software assumes that files of each unique album is stored in the same folder and each unique album have its own folder. Files of each unique album should have the same `album` and `genre` tags as well as the same album image embeded.
