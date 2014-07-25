@@ -272,7 +272,7 @@ io.on('connection', function(socket) {
 		while(i--) {
 			if(albumBuffer.length != 0) {
 				db.get("SELECT album,albumId,genre FROM music " +
-						"WHERE albumId='"+albumBuffer[0].albumId + "' AND track=1",
+						"WHERE albumId='"+albumBuffer[0].albumId + "'",
 						function(err, albumInfo) {
 					if(err) console.error(err);
 
