@@ -1,0 +1,7 @@
+{
+	"name": "dl_creator",
+	"version": "0.0.1",
+	"description": "Download file creator for Yui",
+	"author": "Boris",
+	"main": "main.js"
+}

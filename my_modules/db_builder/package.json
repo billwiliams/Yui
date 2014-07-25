@@ -1,0 +1,13 @@
+{
+	"name": "db_builder",
+	"version": "0.0.1",
+	"description": "Database builder for Yui",
+	"author": "Boris",
+	"main": "main.js",
+	"dependencies": {
+		"sqlite3": "~2.2.0",
+		"findit": "~2.0.0",
+		"graceful-fs": "~3.0.0",
+		"crc": "~2.1.0"
+	}
+}

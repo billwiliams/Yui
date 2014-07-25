@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<!--Title-->
+<title>Yui (0.0.1)</title>
+<!--CSS-->
+<link rel="stylesheet" href="bootstrap-2.3.2/css/bootstrap.min.css">
+<style>
+body {
+	background-color: #333;
+	color: #FFF;
+	padding: 10px;
+	font-family: Verdana, Geneva, sans-serif;
+	font-size: 75%;
+	overflow: hidden;
+}
+
+.dl-link {
+	float: right;
+	cursor: pointer;
+}
+
+.dl-link:hover {
+	text-decoration: underline;
+}
+
+.media {
+	margin-bottom: 40px;
+}
+
+.media-heading {
+	overflow: hidden;
+	border-bottom: 1px solid #CCC;
+}
+
+.track {
+	-webkit-border-radius: 10px;
+	-moz-border-radius: 10px;
+	border-radius: 10px;
+	width: 48%;
+	float: left;
+	margin-bottom: 5px;
+	cursor: pointer;
+}
+
+.playlistTrack {
+	width: 90%;
+	margin: 3px auto;
+	padding: 5px 0px;
+	cursor: pointer;
+	border-bottom: 1px solid #FFF;
+	border-top: 1px solid #FFF;
+}
+
+.track-active {
+	background-color: #68B;
+}
+
+.playlist-active {
+	background-color: rgba(150, 200, 250, 0.3);
+}
+
+.progress {
+	margin: 2px 0px 2px;
+}
+
+#track-artwork {
+	margin: 10px 0px 10px;
+	width: 95%;
+	height: 400px;
+	background-repeat: no-repeat;
+	background-size: contain;
+	clear: both;
+}
+
+#track-info, #track-playlist {
+	background-color: rgba(0, 0, 0, 0.85);
+	opacity: 0;
+	height: 400px;
+	width: 100%;
+	display: none;
+	overflow-x: hidden;
+	overflow-y: scroll;
+}
+
+#browser {
+	position: fixed;
+	top: 40px;
+	bottom: 20px;
+	left: 32%;
+	right: 20px;
+	padding: 20px;
+	overflow-y: scroll;
+}
+
+#player {
+	position: fixed;
+	top: 40px;
+	bottom: 20px;
+	left: 20px;
+	width: 30%;
+	border-right: 1px solid #FFF;
+	overflow: hidden;
+}
+
+#menu {
+	position: fixed;
+	top: 0px;
+	left: 0px;
+	right: 0px;
+	height: 20px;
+	padding: 5px;
+	background-color: #000;
+}
+
+#console {
+	position: fixed;
+	top: 0px;
+	right: 0px;
+	height: 20px;
+	line-height: 20px;
+	width: 70%;
+	padding: 5px;
+	padding-right: 20px;
+	overflow-y: scroll;
+	font-family: monaco;
+	text-align: right;
+	overflow-y: scroll;
+	padding-right: 20px;
+}
+</style>
+</head>
+<body>
+
+	<div id="console"></div>
+
+	<!--Player-->
+	<div id="player">
+		<div style="width: 95%;">
+			<h4 id="track-title"></h4>
+			<p id="track-album"></p>
+			<audio controls autoplay id="track-player" style="width: 100%;">
+			</audio>
+			<p id="track-playback" style="float: right;"></p>
+		</div>
+		<!--Tool Bar-->
+		<div class="navbar-form pull-left" style="margin-bottom: 12px;">
+			<input id="filter-box" onchange="transportSearch();" type="text"
+				style="margin-top: 0px; margin-bottom: 5px;" placeholder='Search...'>
+			<button id="media-info" class="btn btn-content"
+				style="margin-bottom: 5px;" type="button" onclick="transportInfo();">
+				Info</button>
+			<button id="playlist" class="btn btn-content"
+				style="margin-bottom: 5px;" type="button"
+				onclick="transportPlaylist();">
+				Playlist <i class="icon-chevron-down"></i>
+			</button>
+
+		</div>
+		<div id="track-artwork" class="img-rounded">
+			<div id="track-info" class="img-rounded"></div>
+			<div id="track-playlist" class="img-rounded"
+				style="padding-top: 10px;"></div>
+		</div>
+
+
+	</div>
+	<!--Browser-->
+	<div id="browser"></div>
+	<!--downloader-->
+	<iframe id="downloader" style="display: none"></iframe>
+
+
+	<!--Scripts-->
+	<script src="yui-3.17.2/build/yui/yui-min.js"></script>
+	<script src="/socket.io/socket.io.js"></script>
+	<script src="script.js"></script>
+</body>
+</html>
