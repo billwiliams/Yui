@@ -17,6 +17,8 @@ var settings = JSON.parse(fs.readFileSync('./settings.json'));
 
 //check temp folder
 if(!fs.existsSync('./temp')) fs.mkdirSync('./temp');
+//open log
+var logger = fs.createWriteStream(settings.logPath, {flags: 'w'});
 
 //parse argv
 var argList = process.argv.slice(2);
@@ -44,7 +46,7 @@ var db = new sqlite3.Database(settings.databasePath);
 //create genre regex
 var genreRegex = '';
 db.all("SELECT DISTINCT genre FROM music", function(err, genres) {
-	if(err) console.error(err);
+	if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 	if(genres && genres.length > 0) {
 		genreRegex = '^(';
 		for (var i = 0; i < genres.length; i++) {
@@ -59,10 +61,10 @@ db.all("SELECT DISTINCT genre FROM music", function(err, genres) {
 //HTTP Server behaviour
 express.get(settings.subDomain, function(req, res) {
 	res.sendfile('./client/index.html');
-	console.log('[HTTP] Request '+req.url+' from: '+ req.ip);
+	logger.write('('+ new Date().toString() +') '+'[HTTP] Request '+req.url+' from: '+ req.ip +'\n');
 });
 express.use(function(req, res, next) {
-	console.log('[HTTP] '+ req.ip +' '+ req.method + ' ' + req.url);
+	logger.write('('+ new Date().toString() +') '+'[HTTP] '+ req.ip +' '+ req.method + ' ' + req.url +'\n');
 	// check for correct URL
 	if(req.url.search(settings.subDomain) != -1) {
 		req.url = req.url.replace(settings.subDomain, '/');
@@ -92,10 +94,10 @@ express.use(function(req, res, next) {
 		    res.header('Content-Type', 'application/octet-stream');
 		    res.attachment();
 			res.download(path, function(err) {
-				console.log('[HTTP] Download complete: '+ path);
-				if(err) console.error(err);
+				logger.write('('+ new Date().toString() +') '+'[HTTP] Download complete: '+ path +'\n');
+				if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 				fs.unlink(path, function(err) {
-					if(err) console.error(err);
+					if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 				});
 			});
 		} else {
@@ -111,7 +113,7 @@ express.use(function(req, res, next) {
 
 //Socket connections
 io.on('connection', function(socket) {
-	console.log('[Socket] Client connected: '+socket.id);
+	logger.write('('+ new Date().toString() +') '+'[Socket] Client connected: '+socket.id +'\n');
 	// Client fields
 	var activeAudioFile = null;
 	var albumBuffer = [];
@@ -120,17 +122,17 @@ io.on('connection', function(socket) {
 	// Delete audio file on disconnect
 	socket.on('disconnect', function() {
 		if(activeAudioFile) fs.unlink(activeAudioFile, function(err){
-			if(err) console.error(err);
+			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 			activeAudioFile = null;
 		});
 	});
 	// Download album request
 	socket.on("request download", function(album) {
 		if(settings.allowDownload === 'yes' && !dlPreparing) {
-			console.log('[Socket] Download album: '+ album);
+			logger.write('('+ new Date().toString() +') '+'[Socket] Download album: '+ album +'\n');
 			dlPreparing = true;
 			db.all("SELECT file FROM music WHERE album='"+ album.replace(/\'/g, "''") +"'", function(err, fileList) {
-				if(err) console.error(err);
+				if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 				var files = [];
 				for (var i = 0; i < fileList.length; i++) {
 					files.push(fileList[i].file);
@@ -172,8 +174,8 @@ io.on('connection', function(socket) {
 	// Prepare audio file for playback
 	socket.on("request track", function(id) {
 		db.get("SELECT title,album,albumId,artist,genre,file FROM music WHERE id='"+ id +"'", function(err, trackData) {
-			if(err) console.error(err);
-			console.log('[Socket] Request Track ['+id+'] '+trackData.title);
+			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
+			logger.write('('+ new Date().toString() +') '+'[Socket] Request Track ['+id+'] '+trackData.title +'\n');
 			// send track metadata
 			var ffprobe = childProcess.spawn('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', trackData.file]);
 			var ffprobeOut = '';
@@ -219,8 +221,8 @@ io.on('connection', function(socket) {
 			});
 			ffmpeg.on('close', function(code) {
 				if(code) {
-					console.log('[ffmpeg] Error:');
-					console.log(buffer);
+					logger.write('('+ new Date().toString() +') '+'[ffmpeg] Error:' +'\n');
+					logger.write('('+ new Date().toString() +') '+buffer +'\n');
 				} else {
 					// send link to new audio file
 					socket.emit('track data', {
@@ -239,16 +241,16 @@ io.on('connection', function(socket) {
 		if(genreFilter) {
 			genreFilter = genreFilter[0].replace(/:\s$/i, '');
 			query += "genre LIKE '"+ genreFilter +"' AND";
-			console.log('[Socket] Search: "'+ search +'" in "'+ genreFilter +'"');
+			logger.write('('+ new Date().toString() +') '+'[Socket] Search: "'+ search +'" in "'+ genreFilter +'"' +'\n');
 		} else {
-			console.log('[Socket] Search: '+ search);
+			logger.write('('+ new Date().toString() +') '+'[Socket] Search: '+ search +'\n');
 		}
 		query += "( title LIKE '%"+ search.replace(/\'/g, "''") +"%' OR ";
 		query += "album LIKE '%"+ search.replace(/\'/g, "''") +"%' OR ";
 		query += "artist LIKE '%"+ search.replace(/\'/g, "''") +"%' ) ";
 		query += "ORDER BY album COLLATE NOCASE";
 		db.all(query, function(err, albums) {
-			if(err) console.error(err);
+			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 			albumBuffer = albums;
 			activeFilters = search.replace(/\'/g, "''");
 			SendAlbums();
@@ -257,7 +259,7 @@ io.on('connection', function(socket) {
 	// Initialize client
 	socket.on("init", function() {
 		db.all("SELECT DISTINCT albumId FROM music ORDER BY album COLLATE NOCASE", function(err, albums) {
-			if(err) console.error(err);
+			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 			albumBuffer = albums;
 			SendAlbums();
 		});
@@ -274,7 +276,7 @@ io.on('connection', function(socket) {
 				db.get("SELECT album,albumId,genre FROM music " +
 						"WHERE albumId='"+albumBuffer[0].albumId + "'",
 						function(err, albumInfo) {
-					if(err) console.error(err);
+					if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 
 					var albumPacket = [];
 					var imgData;
@@ -292,17 +294,17 @@ io.on('connection', function(socket) {
 					});
 
 					var query = "SELECT title,artist,track,disk,id FROM music ";
-					query += "WHERE album='"+ albumInfo.album.replace(/\'/g, "''") +"' AND ( ";
+					query += "WHERE albumId='"+ albumInfo.albumId +"' AND ( ";
 					query += "album LIKE '%"+ activeFilters +"%' OR ";
 					query += "title LIKE '%"+ activeFilters +"%' OR ";
 					query += "artist LIKE '%"+ activeFilters +"%' ) ";
 					query += "ORDER BY track";
 					db.all(query, function(err, tracks) {
-						if(err) console.error(err);
+						if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 						for (var i = 0; i < tracks.length; i++) {
 							albumPacket.push(tracks[i]);
 						}
-						console.log('[Socket] Sending Album: ' + albumPacket[0].album);
+						logger.write('('+ new Date().toString() +') '+'[Socket] Sending Album: ' + albumPacket[0].album +'\n');
 						socket.emit("new album", albumPacket);
 					});	
 				});
@@ -316,7 +318,7 @@ io.on('connection', function(socket) {
 //Start HTTP server
 if(buildDatabase === 'no') {
 	http.listen(settings.httpPort, function() {
-		console.log('[HTTP] Server listening on Port: ' + settings.httpPort);
+		logger.write('('+ new Date().toString() +') '+'[HTTP] Server listening on Port: ' + settings.httpPort +'\n');
 	});
 }
 

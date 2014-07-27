@@ -10,7 +10,7 @@ var sessionID;
 
 function consolePrintln(string) {
 	YUI().use('node', function(Y) {
-		Y.one('#console').append(string +'<br style="margin-bottom:5px;"/>');
+		Y.one('#console').append(string +'<br style="margin-bottom:6px;"/>');
 		var display = document.getElementById('console');
 		display.scrollTop = display.scrollHeight;
 	});

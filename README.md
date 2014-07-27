@@ -17,6 +17,7 @@ Example settings.json content:<br />
 	"subDomain": "/",
 	"musicDir": "/path/to/my_music/",
 	"databasePath": "./library.db",
+	"logPath": "./yui.log",
 	"imgPath": "./img/_default.jpg",
 	"imgDir": "./img/",
 	"allowDownload": "yes"
