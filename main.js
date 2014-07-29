@@ -1,7 +1,8 @@
 
 //Modules -------------------------------------------------------------------
-var express = require('express')();
-var http = require('http').Server(express);
+var express = require('express');
+var app = express();
+var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var sqlite3 = require('sqlite3').verbose();
 var fs = require('graceful-fs');
@@ -59,11 +60,14 @@ db.all("SELECT DISTINCT genre FROM music", function(err, genres) {
 });
 
 //HTTP Server behaviour
-express.get(settings.subDomain, function(req, res) {
+app.get(settings.subDomain, function(req, res) {
 	res.sendfile('./client/index.html');
 	logger.write('('+ new Date().toString() +') '+'[HTTP] Request '+req.url+' from: '+ req.ip +'\n');
 });
-express.use(function(req, res, next) {
+// Basic Auth
+if(settings.useAuth === 'yes') app.use(express.basicAuth('username', 'password'));
+// Serve content
+app.use(function(req, res, next) {
 	logger.write('('+ new Date().toString() +') '+'[HTTP] '+ req.ip +' '+ req.method + ' ' + req.url +'\n');
 	// check for correct URL
 	if(req.url.search(settings.subDomain) != -1) {

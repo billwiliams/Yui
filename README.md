@@ -20,7 +20,8 @@ Example settings.json content:<br />
 	"logPath": "./yui.log",
 	"imgPath": "./img/_default.jpg",
 	"imgDir": "./img/",
-	"allowDownload": "yes"
+	"allowDownload": "yes",
+	"useAuth": "yes"
 }
 ```
 "imgPath" is the path to the default album image used by the player.<br />
