@@ -80,7 +80,7 @@ socket.on("download link", function(data) {
 		consolePrintln('[Warning] <span style="color:#FA0;">Please wait while previous download is prepared...</span>');
 	} else {
 		consolePrintln('[Log] Acquired Album: <span style="color:#8FF;">'+ data.album +'</span>');
-		document.getElementById('downloader').src = location.href+data.path;
+		document.getElementById('downloader').src = location.href +'dl/'+ data.path;
 	}
 })
 

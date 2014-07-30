@@ -15,6 +15,6 @@ exports.create = function(fileList, albumName, callback) {
 	var zip = childProcess.spawn('zip', zipArgs);
 	zip.on('close', function(code) {
 		if(code) console.error('[Zip] Error code: '+code);
-		callback('/dl/'+ albumName +'.zip');
+		callback(albumName +'.zip');
 	});
 }

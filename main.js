@@ -102,7 +102,8 @@ app.use(function(req, res, next) {
 		}
 		// check for download request with '/dl' in URL
 		else if(/^\/dl/i.test(req.url)) {
-			path = './temp'+ req.url.replace(settings.subDomain +'dl', '');
+			path = './temp'+ req.url.replace(/^\/dl/i, '');
+			console.log(path);
 			res.header('Content-Type', 'application/force-download');
 		    res.header('Content-Type', 'application/octet-stream');
 		    res.attachment();
