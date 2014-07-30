@@ -44,11 +44,20 @@ var db = new sqlite3.Database(settings.databasePath);
 
 //Main -------------------------------------------------------------------
 
-//create genre regex
 var genreRegex = '';
+var genreList = [];
 db.all("SELECT DISTINCT genre FROM music", function(err, genres) {
 	if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 	if(genres && genres.length > 0) {
+		// fill genre list
+		if(genres.length > 1) {
+			for (var i = 0; i < genres.length; i++) {
+				genreList.push(genres[i].genre + ': %');
+            }
+		} else {
+			genreList.push(genres.genre + ': %');
+		}
+		// generate genre regex
 		genreRegex = '^(';
 		for (var i = 0; i < genres.length; i++) {
 			genreRegex += genres[i].genre.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
@@ -203,6 +212,7 @@ io.on('connection', function(socket) {
 					Genre: trackData.genre,
 					File: fsPath.basename(trackData.file),
 					Codec: probeData.codec_long_name,
+					BitRate: probeData.bit_rate,
 					Format: probeData.sample_fmt,
 					SampleRate: probeData.sample_rate,
 					Channel: probeData.channel_layout
@@ -262,6 +272,7 @@ io.on('connection', function(socket) {
 	});
 	// Initialize client
 	socket.on("init", function() {
+		socket.emit('genre list', genreList);
 		db.all("SELECT DISTINCT albumId FROM music ORDER BY album COLLATE NOCASE", function(err, albums) {
 			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 			albumBuffer = albums;

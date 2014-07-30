@@ -141,6 +141,9 @@ socket.on('track info', function(meta) {
 			if(key === 'SampleRate') {
 				meta[key] += ' Hz';
 			}
+			if(key === 'BitRate') {
+				meta[key] += ' bit/s';
+			}
 			if(key != 'image') {
 				table += '<tr><td style="padding: 5px 10px 5px;">' + key + ': </td><td>' + meta[key] + '</td></tr>';
 			}
@@ -216,6 +219,16 @@ function transportPlaylist() {
 	});
 }
 
+//Search bar Autocomplete
+socket.on('genre list', function(genreList) {
+	YUI().use('autocomplete', 'autocomplete-highlighters', function (Y) {
+		Y.one('#filter-box').plug(Y.Plugin.AutoComplete, {
+			resultHighlighter: 'subWordMatch',
+			source: genreList
+		});
+	});
+});
+
 //Request more albums when scrolled near bottom
 setInterval(function() {
 	var browser = document.getElementById('browser');
@@ -234,7 +247,7 @@ YUI().use("node", function(Y) {
 	});
 });
 
-// Set session ID
+//Set session ID
 socket.on('connect', function(){
 	sessionID = socket.io.engine.id;
 });
