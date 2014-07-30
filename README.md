@@ -8,6 +8,7 @@ With the myriads of music players avalible today, one may beg the question why w
 ##Prerequisites:
 nodejs 0.10.26<br />
 ffmpeg 2.2.4<br />
+zip (for album download only)<br />
 Other dependencies should be installed by running "npm install" in the working directory.<br />
 A file named "settings.json" should be placed in the working directory.<br />
 Example settings.json content:<br />
