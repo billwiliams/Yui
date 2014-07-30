@@ -37,5 +37,5 @@ Supported formats: `mp3|m4a|aiff|aac|flac|wav|ape|ogg`<br />
 Audio files should be properly tagged, this software assumes that files of each unique album is stored in the same folder and each unique album have its own folder. Files of each unique album should have the same `album` and `genre` tags as well as the same album image embeded.
 
 ##Search Bar:<br />
-By default, the search bar will match the input with song titles, album and artist names. An optional genre filter can be applied by typing an exact match of the genre name followed by '`: `' at the begining. Because exact matches of genres are required, autocomplete is provided. SQL wildcards such as `%` and `_` also works in the search bar.<br />
+By default, the search bar will match the input with song titles, album and artist names. An optional genre filter can be applied by typing an exact match of the genre name followed by ': ' at the begining. Because exact matches of genres are required, autocomplete is provided. SQL wildcards such as `%` and `_` also works in the search bar.<br />
 Example query: `Rock: simple plan`
