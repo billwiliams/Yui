@@ -4,6 +4,7 @@ var socket = io();
 var player = document.getElementById('track-player');
 var playlistArray, playlistIndex;
 var currentFile = null;
+var serverOnline = false;
 var sessionID;
 
 //Console -------------------------------------------
@@ -139,10 +140,10 @@ socket.on('track info', function(meta) {
 				}
 			}
 			if(key === 'SampleRate') {
-				meta[key] += ' Hz';
+				meta[key] = (parseInt(meta[key],10)/1000) +' kHz';
 			}
 			if(key === 'BitRate') {
-				meta[key] += ' bit/s';
+				meta[key] = (parseInt(meta[key],10)/1000) +' kbit/s';
 			}
 			if(key != 'image') {
 				table += '<tr><td style="padding: 5px 10px 5px;">' + key + ': </td><td>' + meta[key] + '</td></tr>';
@@ -230,10 +231,16 @@ socket.on('genre list', function(genreList) {
 });
 
 //Request more albums when scrolled near bottom
+//Check server still online
 setInterval(function() {
 	var browser = document.getElementById('browser');
 	if(browser.scrollHeight - browser.scrollTop < 4000) {
 		socket.emit('more albums');
+	}
+	if(serverOnline != socket.connected) {
+		serverOnline = socket.connected;
+		if(socket.connected) consolePrintln('[Log] Socket Connected.');
+		else consolePrintln('[Error] <span style="color:#FAA;">Socket Disconnected!</span>');
 	}
 }, 500);
 

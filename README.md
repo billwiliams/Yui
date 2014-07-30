@@ -22,7 +22,9 @@ Example settings.json content:<br />
 	"imgPath": "./img/_default.jpg",
 	"imgDir": "./img/",
 	"allowDownload": "yes",
-	"useAuth": "yes"
+	"useAuth": "yes",
+	"username": "public",
+	"password": "some-pass"
 }
 ```
 "imgPath" is the path to the default album image used by the player.<br />

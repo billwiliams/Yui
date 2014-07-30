@@ -74,7 +74,7 @@ app.get(settings.subDomain, function(req, res) {
 	logger.write('('+ new Date().toString() +') '+'[HTTP] Request '+req.url+' from: '+ req.ip +'\n');
 });
 // Basic Auth
-if(settings.useAuth === 'yes') app.use(express.basicAuth('username', 'password'));
+if(settings.useAuth === 'yes') app.use(express.basicAuth(settings.username, settings.password));
 // Serve content
 app.use(function(req, res, next) {
 	logger.write('('+ new Date().toString() +') '+'[HTTP] '+ req.ip +' '+ req.method + ' ' + req.url +'\n');
