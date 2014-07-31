@@ -249,6 +249,7 @@ io.on('connection', function(socket) {
 	});
 	// Search
 	socket.on('search', function(search) {
+		albumBuffer = [];
 		var genreFilter = search.match(genreRegex);
 		search = search.replace(genreRegex, '');
 		var query = "SELECT DISTINCT albumId FROM music WHERE ";
@@ -267,7 +268,7 @@ io.on('connection', function(socket) {
 			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 			albumBuffer = albums;
 			activeFilters = search.replace(/\'/g, "''");
-			SendAlbums();
+			SendAlbums(10);
 		});
 	});
 	// Initialize client
@@ -276,16 +277,16 @@ io.on('connection', function(socket) {
 		db.all("SELECT DISTINCT albumId FROM music ORDER BY album COLLATE NOCASE", function(err, albums) {
 			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 			albumBuffer = albums;
-			SendAlbums();
+			SendAlbums(10);
 		});
 	});
 	// more albums
-	socket.on("more albums", function() {
-		SendAlbums();
+	socket.on("more albums", function(number) {
+		SendAlbums(number);
 	});
 	// Send albums function, send 5 albums from [albumBuffer] on request.
-	function SendAlbums() {
-		var i = 5;
+	function SendAlbums(number) {
+		var i = number;
 		while(i--) {
 			if(albumBuffer.length != 0) {
 				db.get("SELECT album,albumId,genre FROM music " +

@@ -5,7 +5,7 @@ var player = document.getElementById('track-player');
 var playlistArray, playlistIndex;
 var currentFile = null;
 var serverOnline = false;
-var sessionID;
+var sessionID, pendingAlbums = 0;
 
 //Console -------------------------------------------
 
@@ -21,6 +21,7 @@ function consolePrintln(string) {
 YUI().use('node', function(Y) {
 	socket.on('new album', function(album) {
 		console.log('Album recieved: '+ album[0].album);
+		pendingAlbums--;
 		var mediaObj = Y.Node.create('<div class="media"></div>');
 		var mediaHead = Y.Node.create('<a class="pull-left"></a>');
 		mediaHead.appendChild(Y.Node.create('<img class="media-object" style="width: 150px;" src="data:image/jpeg;base64,'+ album[0].image +'">'));
@@ -160,7 +161,7 @@ socket.on('track data', function(data) {
 	player.load();
 });
 //Start player
-player.addEventListener('progress', function() {
+player.addEventListener('loadeddata', function() {
 	player.play();
 });
 
@@ -170,6 +171,7 @@ function transportSearch() {
 		Y.one('#filter-box').setStyle('backgroundColor', '#FFF');
 		var input = document.getElementById('filter-box').value;
 		socket.emit('search', input);
+		pendingAlbums = 10;
 		Y.one('#browser').setContent('');
 	});
 }
@@ -234,8 +236,9 @@ socket.on('genre list', function(genreList) {
 //Check server still online
 setInterval(function() {
 	var browser = document.getElementById('browser');
-	if(browser.scrollHeight - browser.scrollTop < 4000) {
-		socket.emit('more albums');
+	if(browser.scrollHeight - browser.scrollTop < 4000 && pendingAlbums <= 0) {
+		socket.emit('more albums', 5);
+		pendingAlbums += 5;
 	}
 	if(serverOnline != socket.connected) {
 		serverOnline = socket.connected;
@@ -268,5 +271,6 @@ socket.on('socket created', function(hostname){
 //Signal UI init (Keep at bottom of page)
 console.log('[Socket] Request Init');
 socket.emit('init');
+pendingAlbums = 10;
 
 //END OF FILE ---------------------------------------------
