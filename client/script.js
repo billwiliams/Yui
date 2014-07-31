@@ -160,7 +160,7 @@ socket.on('track data', function(data) {
 	player.load();
 });
 //Start player
-player.addEventListener('canplay', function() {
+player.addEventListener('progress', function() {
 	player.play();
 });
 

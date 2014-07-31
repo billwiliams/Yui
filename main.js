@@ -9,6 +9,7 @@ var fs = require('graceful-fs');
 var fsPath = require('path');
 var crc = require('crc');
 var childProcess = require('child_process');
+var querystring = require('querystring');
 //My Modules -------------------------------------------------------------------
 var dbBuilder = require('./my_modules/db_builder');
 var dlCreator = require('./my_modules/dl_creator');
@@ -77,6 +78,7 @@ app.get(settings.subDomain, function(req, res) {
 if(settings.useAuth === 'yes') app.use(express.basicAuth(settings.username, settings.password));
 // Serve content
 app.use(function(req, res, next) {
+	req.url = querystring.unescape(req.url);
 	logger.write('('+ new Date().toString() +') '+'[HTTP] '+ req.ip +' '+ req.method + ' ' + req.url +'\n');
 	// check for correct URL
 	if(req.url.search(settings.subDomain) != -1) {
@@ -102,10 +104,7 @@ app.use(function(req, res, next) {
 		}
 		// check for download request with '/dl' in URL
 		else if(/^\/dl/i.test(req.url)) {
-			path = './temp'+ req.url.replace(/^\/dl/i, '');
-			res.header('Content-Type', 'application/force-download');
-		    res.header('Content-Type', 'application/octet-stream');
-		    res.attachment();
+			var path = './temp'+ req.url.replace(/^\/dl/i, '');
 			res.download(path, function(err) {
 				logger.write('('+ new Date().toString() +') '+'[HTTP] Download complete: '+ path +'\n');
 				if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
