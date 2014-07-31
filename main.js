@@ -126,6 +126,7 @@ app.use(function(req, res, next) {
 //Socket connections
 io.on('connection', function(socket) {
 	logger.write('('+ new Date().toString() +') '+'[Socket] Client connected: '+socket.id +'\n');
+	socket.emit('socket created', settings.hostname);
 	// Client fields
 	var activeAudioFile = null;
 	var albumBuffer = [];

@@ -255,8 +255,14 @@ YUI().use("node", function(Y) {
 });
 
 //Set session ID
-socket.on('connect', function(){
+socket.on('socket created', function(hostname){
 	sessionID = socket.io.engine.id;
+	if(hostname) {
+		YUI().use('node', function(Y) {
+			Y.one('title').setHTML('Yui @ '+ hostname);
+			Y.one('#menu').setHTML('<span style="font-size: 16px;">Yui | </span>Web-based Music Library / Player @ '+ hostname);
+		});
+	}
 });
 
 //Signal UI init (Keep at bottom of page)

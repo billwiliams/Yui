@@ -2,5 +2,6 @@
 + Add gap-less playback support
 + Add playback modes (repeat single, play single, play playlist)
 + Add user playlists
-+ Improve search (suggestions / advanced search)
 + Add Last.fm scrobbler
++ Fix search bug
++ Fix download filename encoding
