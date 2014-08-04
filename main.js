@@ -53,10 +53,10 @@ db.all("SELECT DISTINCT genre FROM music", function(err, genres) {
 		// fill genre list
 		if(genres.length > 1) {
 			for (var i = 0; i < genres.length; i++) {
-				genreList.push(genres[i].genre + ': %');
+				genreList.push(genres[i].genre + ': ');
             }
 		} else {
-			genreList.push(genres.genre + ': %');
+			genreList.push(genres.genre + ': ');
 		}
 		// generate genre regex
 		genreRegex = '^(';
@@ -126,10 +126,12 @@ app.use(function(req, res, next) {
 //Socket connections
 io.on('connection', function(socket) {
 	logger.write('('+ new Date().toString() +') '+'[Socket] Client connected: '+socket.id +'\n');
-	socket.emit('socket created', settings.hostname);
+	socket.emit('socket created', {
+		hostname: settings.hostname,
+		genreList: genreList
+	});
 	// Client fields
 	var activeAudioFile = null;
-	var albumBuffer = [];
 	var activeFilters = '';
 	var dlPreparing = false;
 	// Delete audio file on disconnect
@@ -249,85 +251,61 @@ io.on('connection', function(socket) {
 	});
 	// Search
 	socket.on('search', function(search) {
-		albumBuffer = [];
 		var genreFilter = search.match(genreRegex);
 		search = search.replace(genreRegex, '');
-		var query = "SELECT DISTINCT albumId FROM music WHERE ";
+		var query = "SELECT DISTINCT album,albumId FROM music WHERE ";
+		var msg = '';
 		if(genreFilter) {
 			genreFilter = genreFilter[0].replace(/:\s$/i, '');
 			query += "genre LIKE '"+ genreFilter +"' AND";
-			logger.write('('+ new Date().toString() +') '+'[Socket] Search: "'+ search +'" in "'+ genreFilter +'"' +'\n');
+			msg = '"'+ search +'" in "'+ genreFilter +'"';
 		} else {
-			logger.write('('+ new Date().toString() +') '+'[Socket] Search: '+ search +'\n');
+			msg = '"'+ search +'"';
 		}
+		logger.write('('+ new Date().toString() +') '+'[Socket] Search: '+ msg +'\n');
 		query += "( title LIKE '%"+ search.replace(/\'/g, "''") +"%' OR ";
 		query += "album LIKE '%"+ search.replace(/\'/g, "''") +"%' OR ";
 		query += "artist LIKE '%"+ search.replace(/\'/g, "''") +"%' ) ";
 		query += "ORDER BY album COLLATE NOCASE";
-		db.all(query, function(err, albums) {
+		db.all(query, function(err, result) {
 			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
-			albumBuffer = albums;
 			activeFilters = search.replace(/\'/g, "''");
-			SendAlbums(10);
+			socket.emit('search end', {
+				query: msg,
+				result: result,
+				allowDownload: settings.allowDownload
+			});
 		});
 	});
-	// Initialize client
-	socket.on("init", function() {
-		socket.emit('genre list', genreList);
-		db.all("SELECT DISTINCT albumId FROM music ORDER BY album COLLATE NOCASE", function(err, albums) {
-			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
-			albumBuffer = albums;
-			SendAlbums(10);
-		});
-	});
-	// more albums
-	socket.on("more albums", function(number) {
-		SendAlbums(number);
-	});
-	// Send albums function, send 5 albums from [albumBuffer] on request.
-	function SendAlbums(number) {
-		var i = number;
-		while(i--) {
-			if(albumBuffer.length != 0) {
-				db.get("SELECT album,albumId,genre FROM music " +
-						"WHERE albumId='"+albumBuffer[0].albumId + "'",
-						function(err, albumInfo) {
-					if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
-
-					var albumPacket = [];
-					var imgData;
-					var imgPath = settings.imgDir + albumInfo.albumId + '.jpg';
-					if(fs.existsSync(imgPath)) {
-						imgData = fs.readFileSync(imgPath).toString('base64');
-					} else {
-						imgData = fs.readFileSync(settings.imgPath).toString('base64');
-					}
-					albumPacket.push({
-						album: albumInfo.album,
-						genre: albumInfo.genre,
-						image: imgData,
-						allowDownload: settings.allowDownload
-					});
-
-					var query = "SELECT title,artist,track,disk,id FROM music ";
-					query += "WHERE albumId='"+ albumInfo.albumId +"' AND ( ";
-					query += "album LIKE '%"+ activeFilters +"%' OR ";
-					query += "title LIKE '%"+ activeFilters +"%' OR ";
-					query += "artist LIKE '%"+ activeFilters +"%' ) ";
-					query += "ORDER BY track";
-					db.all(query, function(err, tracks) {
-						if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
-						for (var i = 0; i < tracks.length; i++) {
-							albumPacket.push(tracks[i]);
-						}
-						logger.write('('+ new Date().toString() +') '+'[Socket] Sending Album: ' + albumPacket[0].album +'\n');
-						socket.emit("new album", albumPacket);
-					});	
-				});
-				albumBuffer.shift();
-			}
+	// get album
+	socket.on("get album", function(albumID) {
+		var albumPacket = [];
+		var imgData;
+		var imgPath = settings.imgDir + albumID + '.jpg';
+		if(fs.existsSync(imgPath)) {
+			imgData = fs.readFileSync(imgPath).toString('base64');
+		} else {
+			imgData = fs.readFileSync(settings.imgPath).toString('base64');
 		}
-	}
+		albumPacket.push({
+			albumId: albumID,
+			image: imgData
+		});
+		var query = "SELECT title,artist,track,disk,id FROM music ";
+		query += "WHERE albumId='"+ albumID +"' AND ( ";
+		query += "album LIKE '%"+ activeFilters +"%' OR ";
+		query += "title LIKE '%"+ activeFilters +"%' OR ";
+		query += "artist LIKE '%"+ activeFilters +"%' ) ";
+		query += "ORDER BY track";
+		db.all(query, function(err, tracks) {
+			if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
+			for (var i = 0; i < tracks.length; i++) {
+				albumPacket.push(tracks[i]);
+			}
+			logger.write('('+ new Date().toString() +') '+'[Socket] Sending Album: ' + albumPacket[0].album +'\n');
+			socket.emit("new album", albumPacket);
+		});	
+	});
 });
 
 

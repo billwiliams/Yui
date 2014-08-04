@@ -3,5 +3,4 @@
 + Add playback modes (repeat single, play single, play playlist)
 + Add user playlists
 + Add Last.fm scrobbler
-+ Fix search bug
 + Fix download filename encoding

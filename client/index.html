@@ -130,15 +130,29 @@ body {
 	padding-right: 20px;
 }
 
+#loading {
+	z-index: 99;
+	font-size: 24pt;
+	display: none;
+	position: fixed;
+	top: 0px;
+	bottom: 0px;
+	left: 0px;
+	right: 0px;
+	background-color: rgba(0, 0, 0, 0.9);
+	padding: 20px;
+	text-align: center;
+}
+
 .yui3-aclist-content {
 	color: #000;
 }
-
 </style>
 </head>
 <body class="yui3-skin-sam">
 	<div id="menu">
-	<span style="font-size: 16px;">Yui | </span>Web-based Music Library / Player
+		<span style="font-size: 16px;">Yui | </span>Web-based Music Library /
+		Player
 	</div>
 	<div id="console"></div>
 
@@ -153,8 +167,9 @@ body {
 		</div>
 		<!--Tool Bar-->
 		<div class="navbar-form pull-left" style="margin-bottom: 12px;">
-			<input id="filter-box" onchange="transportSearch();" type="text"
-				style="margin-top: 0px; margin-bottom: 5px;" placeholder='Search...'>
+			<input id="filter-box" onchange="transportSearch(this.value);"
+				type="text" style="margin-top: 0px; margin-bottom: 5px;"
+				placeholder='Search...'>
 			<button id="media-info" class="btn btn-content"
 				style="margin-bottom: 5px;" type="button" onclick="transportInfo();">
 				Info</button>
@@ -177,6 +192,8 @@ body {
 	<div id="browser"></div>
 	<!--downloader-->
 	<iframe id="downloader" style="display: none"></iframe>
+	<!--loading screen-->
+	<div id="loading">- Loading -</div>
 
 
 	<!--Scripts-->

@@ -5,10 +5,11 @@ var player = document.getElementById('track-player');
 var playlistArray, playlistIndex;
 var currentFile = null;
 var serverOnline = false;
-var sessionID, pendingAlbums = 0;
+var sessionID, albumList = [];
 
-//Console -------------------------------------------
+//Functions -------------------------------------------
 
+//Print line to on-screen console
 function consolePrintln(string) {
 	YUI().use('node', function(Y) {
 		Y.one('#console').append(string +'<br style="margin-bottom:6px;"/>');
@@ -17,24 +18,77 @@ function consolePrintln(string) {
 	});
 }
 
-//Render new album in browser
-YUI().use('node', function(Y) {
-	socket.on('new album', function(album) {
-		console.log('Album recieved: '+ album[0].album);
-		pendingAlbums--;
-		var mediaObj = Y.Node.create('<div class="media"></div>');
-		var mediaHead = Y.Node.create('<a class="pull-left"></a>');
-		mediaHead.appendChild(Y.Node.create('<img class="media-object" style="width: 150px;" src="data:image/jpeg;base64,'+ album[0].image +'">'));
-		var mediaBody = Y.Node.create('<div class="media-body"></div>');
-		var heading = Y.Node.create('<div class="media-heading"></div>');
-		heading.appendChild(Y.Node.create('<h4 style="float: left; margin-top:0px;">'+ album[0].album +'</h4>'));
-		if(album[0].allowDownload === 'yes') {
-			heading.appendChild(Y.Node.create('<small class="dl-link" onclick="downloadAlbum(\''+ album[0].album +
-			'\');"><i class="icon-arrow-down icon-white"></i>Download</small>'));
+//Display media info
+function transportInfo() {
+	YUI().use('node', 'transition', function(Y) {
+		if(Y.one('#track-playlist').getStyle('opacity') != '0') {
+			transportPlaylist();
 		}
-		mediaBody.appendChild(heading);
+		var target = 0, opacity = Y.one('#track-info').getStyle('opacity');
+		if(opacity != '1') {
+			target = 1;
+			Y.one('#track-info').setStyle('display', 'block')
+			Y.one('#media-info').addClass('active');
+		}
+		Y.one('#track-info').transition({
+			duration: 0.3,
+			easing: 'ease-out',
+			opacity: target,
+		});
+		if(!target) {
+			Y.one('#track-info').setStyle('display', 'none');
+			Y.one('#media-info').removeClass('active');
+		}
+	});
+}
+//Display Playlist
+function transportPlaylist() {
+	YUI().use('node', 'transition', function(Y) {
+		if(Y.one('#track-info').getStyle('opacity') != '0') {
+			transportInfo();
+		}
+		var target = 0, opacity = Y.one('#track-playlist').getStyle('opacity');
+		if(opacity != '1') {
+			target = 1;
+			Y.one('#track-playlist').setStyle('display', 'block')
+			Y.one('#playlist').addClass('active');
+		}
+		Y.one('#track-playlist').transition({
+			duration: 0.3,
+			easing: 'ease-out',
+			opacity: target,
+		});
+		if(!target) {
+			Y.one('#track-playlist').setStyle('display', 'none');
+			Y.one('#playlist').removeClass('active');
+		}
+	});
+}
+
+//binary search array
+function binSearch(array, comp) {
+	var min = 0, max = array.length - 1;
+	var index, result, match = false;
+	do {
+		index = Math.floor((max+min)/2);
+		result = comp(array[index]);
+		if(result == 1) max = index - 1;
+		if(result == -1) min = index + 1;
+	} while(result != 0 && max >= min);
+	if(result == 0) match = true;
+	return {index:index, match:match};
+}
+
+//Main -------------------------------------------
+
+//Render new album in browser
+YUI().use('node', 'transition', function(Y) {
+	socket.on('new album', function(album) {
+		var mediaImage = Y.one('#a-'+ album[0].albumId +'-img');
+		var mediaBody = Y.one('#a-'+ album[0].albumId +'-body');
+		mediaImage.set('src', 'data:image/jpeg;base64,'+ album[0].image);
 		var disks = [[]];
-		for(var i = 1; i<album.length; i++) {
+		for(var i = 1; i < album.length; i++) {
 			var track = Y.Node.create('<dl class="dl-horizontal track " id="t-'+ album[i].id +
 					'" onclick="PlaySong(\''+album[i].id+'\', \''+album[i].title.replace(/\'/g, "\\'")+'\')"></dl>');
 			track.appendChild(Y.Node.create('<dt style="width: 30px;">'+ album[i].track +'</dt>'));
@@ -63,10 +117,54 @@ YUI().use('node', function(Y) {
 				}
 			}
 		}
+		mediaImage.transition({
+		    duration: 0.3,
+		    easing: 'ease-out',
+		    opacity: 1
+		});
+		mediaBody.transition({
+		    duration: 0.3,
+		    easing: 'ease-out',
+		    opacity: 1
+		});
+	});
+});
 
-		mediaObj.appendChild(mediaHead);
-		mediaObj.appendChild(mediaBody);
-		Y.one('#browser').appendChild(mediaObj);
+//album search function
+function transportSearch(query) {
+	YUI().use('node', function(Y) {
+		location.hash = encodeURI(query);
+		socket.emit('search', query);
+		Y.one('#browser').setContent('');
+		Y.one('#loading').setStyle('display', 'block');
+	});
+}
+socket.on('search end', function(data) {
+	consolePrintln('[Log] Search: <span style="color:#8FF;">'+ data.query +'</span>, '+ data.result.length +' albums found.');
+	while(albumList.length > 0) albumList.pop();
+	YUI().use('node', function(Y) {
+		for (var i = 0; i < data.result.length; i++) {
+			var mediaObj = Y.Node.create('<div class="media" id="a-'+ data.result[i].albumId +'"></div>');
+			var mediaHead = Y.Node.create('<a class="pull-left"></a>');
+			mediaHead.appendChild(Y.Node.create('<img class="media-object" style="width: 150px; opacity: 0;" id="a-'+ data.result[i].albumId +'-img">'));
+			var mediaBody = Y.Node.create('<div class="media-body" style="opacity: 0;" id="a-'+ data.result[i].albumId +'-body"></div>');
+			var heading = Y.Node.create('<div class="media-heading"></div>');
+			heading.appendChild(Y.Node.create('<h4 style="float: left; margin-top:0px;">'+ data.result[i].album +'</h4>'));
+			if(data.allowDownload === 'yes') {
+				heading.appendChild(Y.Node.create('<small class="dl-link" onclick="downloadAlbum(\''+ data.result[i].album +
+				'\');"><i class="icon-arrow-down icon-white"></i>Download</small>'));
+			}
+			mediaObj.appendChild(mediaHead);
+			mediaObj.appendChild(heading);
+			mediaObj.appendChild(mediaBody);
+			Y.one('#browser').appendChild(mediaObj);
+			albumList.push({
+				id: data.result[i].albumId,
+				rendered: false
+			});
+		}
+		getAlbums();
+		Y.one('#loading').setStyle('display', 'none');
 	});
 });
 
@@ -165,81 +263,8 @@ player.addEventListener('loadeddata', function() {
 	player.play();
 });
 
-//Search function
-function transportSearch() {
-	YUI().use('node', function(Y) {
-		Y.one('#filter-box').setStyle('backgroundColor', '#FFF');
-		var input = document.getElementById('filter-box').value;
-		socket.emit('search', input);
-		pendingAlbums = 10;
-		Y.one('#browser').setContent('');
-	});
-}
-//Display media info
-function transportInfo() {
-	YUI().use('node', 'transition', function(Y) {
-		if(Y.one('#track-playlist').getStyle('opacity') != '0') {
-			transportPlaylist();
-		}
-		var target = 0, opacity = Y.one('#track-info').getStyle('opacity');
-		if(opacity != '1') {
-			target = 1;
-			Y.one('#track-info').setStyle('display', 'block')
-			Y.one('#media-info').addClass('active');
-		}
-		Y.one('#track-info').transition({
-			duration: 0.3,
-			easing: 'ease-out',
-			opacity: target,
-		});
-		if(!target) {
-			Y.one('#track-info').setStyle('display', 'none');
-			Y.one('#media-info').removeClass('active');
-		}
-	});
-}
-//Display Playlist
-function transportPlaylist() {
-	YUI().use('node', 'transition', function(Y) {
-		if(Y.one('#track-info').getStyle('opacity') != '0') {
-			transportInfo();
-		}
-		var target = 0, opacity = Y.one('#track-playlist').getStyle('opacity');
-		if(opacity != '1') {
-			target = 1;
-			Y.one('#track-playlist').setStyle('display', 'block')
-			Y.one('#playlist').addClass('active');
-		}
-		Y.one('#track-playlist').transition({
-			duration: 0.3,
-			easing: 'ease-out',
-			opacity: target,
-		});
-		if(!target) {
-			Y.one('#track-playlist').setStyle('display', 'none');
-			Y.one('#playlist').removeClass('active');
-		}
-	});
-}
-
-//Search bar Autocomplete
-socket.on('genre list', function(genreList) {
-	YUI().use('autocomplete', 'autocomplete-highlighters', function (Y) {
-		Y.one('#filter-box').plug(Y.Plugin.AutoComplete, {
-			resultHighlighter: 'subWordMatch',
-			source: genreList
-		});
-	});
-});
-
-//Request more albums when scrolled near bottom
 //Check server still online
 setInterval(function() {
-	var browser = document.getElementById('browser');
-	if(browser.scrollHeight - browser.scrollTop < 4000 && pendingAlbums <= 0) {
-		socket.emit('more albums', 5);
-		pendingAlbums += 5;
-	}
 	if(serverOnline != socket.connected) {
 		serverOnline = socket.connected;
 		if(socket.connected) consolePrintln('[Log] Socket Connected.');
@@ -257,20 +282,58 @@ YUI().use("node", function(Y) {
 	});
 });
 
-//Set session ID
-socket.on('socket created', function(hostname){
+//Browser scroll event
+YUI().use('event', function (Y) {
+	var scrollTimer;
+	function startTimer() {
+		scrollTimer = setTimeout(function() {
+			clearTimeout(scrollTimer);
+			getAlbums();
+		}, 200);
+	}
+	Y.on("mousewheel", function() {
+		if(scrollTimer) {
+			clearTimeout(scrollTimer);
+			startTimer();
+		} else {
+			startTimer();
+		}
+	});
+});
+function getAlbums() {
+	var result = binSearch(albumList, function(album) {
+		var offset = document.getElementById('a-'+ album.id).offsetTop - document.getElementById('browser').scrollTop;
+		if(offset > 60) return 1;
+		if(offset < -60) return -1;
+		return 0;
+	});
+	for (var i = 0; i < 4; i++) {
+		if(!albumList[result.index + i].rendered) {
+			socket.emit('get album', albumList[result.index + i].id);
+			albumList[result.index + i].rendered = true;
+		} 
+    }
+}
+
+//Socket Init
+socket.on('socket created', function(initData){
 	sessionID = socket.io.engine.id;
-	if(hostname) {
+	if(initData.hostname) {
 		YUI().use('node', function(Y) {
-			Y.one('title').setHTML('Yui @ '+ hostname);
-			Y.one('#menu').setHTML('<span style="font-size: 16px;">Yui | </span>Web-based Music Library / Player @ '+ hostname);
+			Y.one('title').setHTML('Yui @ '+ initData.hostname);
+			Y.one('#menu').setHTML('<span style="font-size: 16px;">Yui | </span>Web-based Music Library / Player @ '+ initData.hostname);
 		});
 	}
+	YUI().use('autocomplete', 'autocomplete-highlighters', function (Y) {
+		Y.one('#filter-box').plug(Y.Plugin.AutoComplete, {
+			resultHighlighter: 'subWordMatch',
+			source: initData.genreList
+		});
+	});
+	var hash = decodeURI(location.hash).replace(/^[#]/i, '');
+	console.log('[Socket] Request Init: '+ hash);
+	transportSearch(hash);
 });
 
-//Signal UI init (Keep at bottom of page)
-console.log('[Socket] Request Init');
-socket.emit('init');
-pendingAlbums = 10;
 
 //END OF FILE ---------------------------------------------
