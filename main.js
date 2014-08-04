@@ -302,7 +302,6 @@ io.on('connection', function(socket) {
 			for (var i = 0; i < tracks.length; i++) {
 				albumPacket.push(tracks[i]);
 			}
-			logger.write('('+ new Date().toString() +') '+'[Socket] Sending Album: ' + albumPacket[0].album +'\n');
 			socket.emit("new album", albumPacket);
 		});	
 	});
