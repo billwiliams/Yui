@@ -118,14 +118,14 @@ YUI().use('node', 'transition', function(Y) {
 			}
 		}
 		mediaImage.transition({
-		    duration: 0.3,
-		    easing: 'ease-out',
-		    opacity: 1
+			duration: 0.3,
+			easing: 'ease-out',
+			opacity: 1
 		});
 		mediaBody.transition({
-		    duration: 0.3,
-		    easing: 'ease-out',
-		    opacity: 1
+			duration: 0.3,
+			easing: 'ease-out',
+			opacity: 1
 		});
 	});
 });
@@ -140,30 +140,36 @@ function transportSearch(query) {
 	});
 }
 socket.on('search end', function(data) {
-	consolePrintln('[Log] Search: <span style="color:#8FF;">'+ data.query +'</span>, '+ data.result.length +' albums found.');
+	var msg = '[Log] Search: <span style="color:#8FF;">'+ data.query +'</span>, ';
+	if(data.result.length > 1) msg += data.result.length +' albums found.';
+	else if(data.result.length == 1) msg += '1 album found.';
+	else msg += 'no results found.';
+	consolePrintln(msg);
 	while(albumList.length > 0) albumList.pop();
 	YUI().use('node', function(Y) {
-		for (var i = 0; i < data.result.length; i++) {
-			var mediaObj = Y.Node.create('<div class="media" id="a-'+ data.result[i].albumId +'"></div>');
-			var mediaHead = Y.Node.create('<a class="pull-left"></a>');
-			mediaHead.appendChild(Y.Node.create('<img class="media-object" style="width: 150px; opacity: 0;" id="a-'+ data.result[i].albumId +'-img">'));
-			var mediaBody = Y.Node.create('<div class="media-body" style="opacity: 0;" id="a-'+ data.result[i].albumId +'-body"></div>');
-			var heading = Y.Node.create('<div class="media-heading"></div>');
-			heading.appendChild(Y.Node.create('<h4 style="float: left; margin-top:0px;">'+ data.result[i].album +'</h4>'));
-			if(data.allowDownload === 'yes') {
-				heading.appendChild(Y.Node.create('<small class="dl-link" onclick="downloadAlbum(\''+ data.result[i].album +
-				'\');"><i class="icon-arrow-down icon-white"></i>Download</small>'));
+		if(data.result.length > 0) {
+			for (var i = 0; i < data.result.length; i++) {
+				var mediaObj = Y.Node.create('<div class="media" id="a-'+ data.result[i].albumId +'"></div>');
+				var mediaHead = Y.Node.create('<a class="pull-left"></a>');
+				mediaHead.appendChild(Y.Node.create('<img class="media-object" style="width: 150px; opacity: 0;" id="a-'+ data.result[i].albumId +'-img">'));
+				var mediaBody = Y.Node.create('<div class="media-body" style="opacity: 0;" id="a-'+ data.result[i].albumId +'-body"></div>');
+				var heading = Y.Node.create('<div class="media-heading"></div>');
+				heading.appendChild(Y.Node.create('<h4 style="float: left; margin-top:0px;">'+ data.result[i].album +'</h4>'));
+				if(data.allowDownload === 'yes') {
+					heading.appendChild(Y.Node.create('<small class="dl-link" onclick="downloadAlbum(\''+ data.result[i].album +
+					'\');"><i class="icon-arrow-down icon-white"></i>Download</small>'));
+				}
+				mediaObj.appendChild(mediaHead);
+				mediaObj.appendChild(heading);
+				mediaObj.appendChild(mediaBody);
+				Y.one('#browser').appendChild(mediaObj);
+				albumList.push({
+					id: data.result[i].albumId,
+					rendered: false
+				});
 			}
-			mediaObj.appendChild(mediaHead);
-			mediaObj.appendChild(heading);
-			mediaObj.appendChild(mediaBody);
-			Y.one('#browser').appendChild(mediaObj);
-			albumList.push({
-				id: data.result[i].albumId,
-				rendered: false
-			});
+			getAlbums();
 		}
-		getAlbums();
 		Y.one('#loading').setStyle('display', 'none');
 	});
 });
@@ -307,12 +313,12 @@ function getAlbums() {
 		if(offset < -60) return -1;
 		return 0;
 	});
-	for (var i = 0; i < 4; i++) {
-		if(!albumList[result.index + i].rendered) {
+	for (var i = -1; i < 4; i++) {
+		if(albumList[result.index + i] && !albumList[result.index + i].rendered) {
 			socket.emit('get album', albumList[result.index + i].id);
 			albumList[result.index + i].rendered = true;
 		} 
-    }
+	}
 }
 
 //Socket Init
