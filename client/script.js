@@ -5,6 +5,7 @@ var player = document.getElementById('track-player');
 var playlistArray, playlistIndex;
 var currentFile = null;
 var serverOnline = false;
+var requestingSong = false;
 var sessionID, albumList = [];
 
 //Functions -------------------------------------------
@@ -192,14 +193,17 @@ socket.on("download link", function(data) {
 
 //Play new song
 function PlaySong(id, title) {
-	consolePrintln('[Log] Requesting Song: <span style="color:#8FF;">'+ title +'</span>');
-	YUI().use('node', function(Y) {
-		var active = Y.one('.track-active')
-		if(active) active.removeClass('track-active');
-		Y.one('#t-'+id).addClass('track-active');
-	});
-	socket.emit('request playlist', id);
-	socket.emit('request track', id);
+	if(!requestingSong) {
+		requestingSong = true;
+		consolePrintln('[Log] Requesting Song: <span style="color:#8FF;">'+ title +'</span>');
+		YUI().use('node', function(Y) {
+			var active = Y.one('.track-active')
+			if(active) active.removeClass('track-active');
+			Y.one('#t-'+id).addClass('track-active');
+		});
+		socket.emit('request playlist', id);
+		socket.emit('request track', id);
+	}
 }
 //Play next song
 player.addEventListener('ended', function() {
@@ -261,6 +265,7 @@ socket.on('track info', function(meta) {
 //Track URL for player
 socket.on('track data', function(data) {
 	consolePrintln('[Log] Acquired Song: <span style="color:#8FF;">'+ data.title +'</span>');
+	requestingSong = false;
 	player.src = 'dat/'+data.file;
 	player.load();
 });
