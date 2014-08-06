@@ -11,8 +11,9 @@ var crc = require('crc');
 var childProcess = require('child_process');
 var querystring = require('querystring');
 //My Modules -------------------------------------------------------------------
-var dbBuilder = require('./my_modules/db_builder');
-var dlCreator = require('./my_modules/dl_creator');
+var dbBuilder = require('./my_modules/db_builder.js');
+var dlCreator = require('./my_modules/dl_creator.js');
+var fsOrganizer = require('./my_modules/fs_organizer.js');
 
 //Setup -------------------------------------------------------------------
 var settings = JSON.parse(fs.readFileSync('./settings.json'));
@@ -25,6 +26,7 @@ var logger = fs.createWriteStream(settings.logPath, {flags: 'w'});
 //parse argv
 var argList = process.argv.slice(2);
 var buildDatabase = 'no';
+var newLibPath;
 for(var i = 0; i < argList.length; i++) {
 	if(/\-(build|b)/i.test(argList[i])) {
 		buildDatabase = 'build';
@@ -32,11 +34,21 @@ for(var i = 0; i < argList.length; i++) {
 	if(/\-(update|u)/i.test(argList[i])) {
 		buildDatabase = 'update';
 	}
+	if(/\-(move|m)/i.test(argList[i])) {
+		buildDatabase = 'organize';
+		newLibPath = argList[i+1];
+	}
+	if(/\-(organize|o)/i.test(argList[i])) {
+		buildDatabase = 'organize';
+		newLibPath = settings.musicDir;
+	}
 }
 if(buildDatabase === 'build') {
 	dbBuilder.build(settings);
 } else if(buildDatabase === 'update') {
 	dbBuilder.update(settings);
+} else if(buildDatabase === 'organize') {
+	fsOrganizer.organize(settings, newLibPath);
 }
 
 //Open DB

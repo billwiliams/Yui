@@ -318,7 +318,7 @@ function getAlbums() {
 		if(offset < -60) return -1;
 		return 0;
 	});
-	for (var i = -1; i < 4; i++) {
+	for (var i = 0; i < 5; i++) {
 		if(albumList[result.index + i] && !albumList[result.index + i].rendered) {
 			socket.emit('get album', albumList[result.index + i].id);
 			albumList[result.index + i].rendered = true;
