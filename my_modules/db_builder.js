@@ -80,7 +80,8 @@ function processFile(scanResult, currentFileIndex, settings, db, callback) {
 				}
 				// Check if song already exist by matching title and album
 				db.get("SELECT title FROM music WHERE title='"+ metadata.title.replace(/\'/g, "''") +
-						"' AND album='"+ metadata.album.replace(/\'/g, "''") +"'", function(err, data) {
+						"' AND album='"+ metadata.album.replace(/\'/g, "''") +"' AND artist='"+ 
+						metadata.artist.replace(/\'/g, "''") +"'", function(err, data) {
 					if(err) {
 						console.error(err);
 					}
@@ -167,12 +168,11 @@ exports.update = function(settings) {
 						id: trackID,
 						path: filePath
 					});
-					console.log('[FS] file #'+scanResult.length+' : ['+ trackID +'] '+filePath.replace(settings.musicDir,'/'));
 				}
 			});
 			finder.on('end', function() {
 				// file search complete
-				console.log('[FS] Scan Complete!');
+				console.log('[FS] Scan Complete, Found: ' + scanResult.length);
 				// Delete all files in temp folder
 				var remover = find(process.cwd() +'/temp/');
 				remover.on('file', function(filePath, stat) {
@@ -199,7 +199,6 @@ exports.update = function(settings) {
 								index = Math.floor((max+min)/2);
 							}
 							if(target == parseInt(idList[index].id, 16)) {
-								console.log('[SQL] Keep Entry: '+ idList[index].id);
 								scanResult.splice(i, 1);
 								idList.splice(index, 1);
 								i--;

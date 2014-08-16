@@ -88,7 +88,6 @@ app.get(settings.subDomain, function(req, res) {
 });
 // Basic Auth
 if(settings.useAuth === 'yes') app.use(express.basicAuth(settings.username, settings.password));
-// Serve content
 app.use(function(req, res, next) {
 	req.url = querystring.unescape(req.url);
 	logger.write('('+ new Date().toString() +') '+'[HTTP] '+ req.ip +' '+ req.method + ' ' + req.url +'\n');
@@ -154,33 +153,33 @@ io.on('connection', function(socket) {
 		});
 	});
 	// Download album request
-	socket.on("request download", function(album) {
+	socket.on("request download", function(albumId) {
 		if(settings.allowDownload === 'yes' && !dlPreparing) {
-			logger.write('('+ new Date().toString() +') '+'[Socket] Download album: '+ album +'\n');
+			logger.write('('+ new Date().toString() +') '+'[Socket] Download album: '+ albumId +'\n');
 			dlPreparing = true;
-			db.all("SELECT file FROM music WHERE album='"+ album.replace(/\'/g, "''") +"'", function(err, fileList) {
+			db.all("SELECT file FROM music WHERE albumId='"+ albumId +"'", function(err, fileList) {
 				if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 				var files = [];
 				for (var i = 0; i < fileList.length; i++) {
 					files.push(fileList[i].file);
 				}
-				dlCreator.create(files, album, function(path) {
+				dlCreator.create(files, albumId, function(path) {
 					dlPreparing = false;
 					socket.emit('download link', {
-						path: path,
-						album: album
+						path: fsPath.join('dl', path),
+						albumId: albumId
 					});
 				})
 			});
 		} else if(dlPreparing) {
 			socket.emit('download link', {
 				path: 'preparing',
-				album: album
+				albumId: albumId
 			});
 		} else {
 			socket.emit('download link', {
 				path: 'rejected',
-				album: album
+				albumId: albumId
 			});
 		}
 	});

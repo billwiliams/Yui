@@ -157,8 +157,8 @@ socket.on('search end', function(data) {
 				var heading = Y.Node.create('<div class="media-heading"></div>');
 				heading.appendChild(Y.Node.create('<h4 style="float: left; margin-top:0px;">'+ data.result[i].album +'</h4>'));
 				if(data.allowDownload === 'yes') {
-					heading.appendChild(Y.Node.create('<small class="dl-link" onclick="downloadAlbum(\''+ data.result[i].album +
-					'\');"><i class="icon-arrow-down icon-white"></i>Download</small>'));
+					heading.appendChild(Y.Node.create('<small class="dl-link" onclick="downloadAlbum(\''+ data.result[i].albumId +
+							'\');"><i class="icon-arrow-down icon-white"></i>Download</small>'));
 				}
 				mediaObj.appendChild(mediaHead);
 				mediaObj.appendChild(heading);
@@ -176,9 +176,9 @@ socket.on('search end', function(data) {
 });
 
 //Album download
-function downloadAlbum(album) {
-	consolePrintln('[Log] Requesting Download: <span style="color:#8FF;">'+ album +'</span>');
-	socket.emit("request download", album);
+function downloadAlbum(albumId) {
+	consolePrintln('[Log] Requesting Download: <span style="color:#8FF;">'+ albumId +'</span>');
+	socket.emit("request download", albumId);
 }
 socket.on("download link", function(data) {
 	if(data.path === 'rejected') {
@@ -186,8 +186,8 @@ socket.on("download link", function(data) {
 	} else if(data.path === 'preparing') {
 		consolePrintln('[Warning] <span style="color:#FA0;">Please wait while previous download is prepared...</span>');
 	} else {
-		consolePrintln('[Log] Acquired Album: <span style="color:#8FF;">'+ data.album +'</span>');
-		document.getElementById('downloader').src = location.href.replace(encodeURI(location.hash), '') +'dl/'+ data.path;
+		consolePrintln('[Log] Acquired Album: <span style="color:#8FF;">'+ data.albumId +'</span>');
+		document.getElementById('downloader').src = data.path;
 	}
 })
 
@@ -342,6 +342,7 @@ socket.on('socket created', function(initData){
 		});
 	});
 	var hash = decodeURI(location.hash).replace(/^[#]/i, '');
+	if(hash === '') hash = 'New: ';
 	console.log('[Socket] Request Init: '+ hash);
 	transportSearch(hash);
 });

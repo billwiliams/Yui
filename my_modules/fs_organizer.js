@@ -23,7 +23,7 @@ exports.organize = function(settings, outDir) {
 				if(!fs.existsSync(outPath)) fs.mkdirSync(outPath);
 				outPath = path.join(outPath, current.album.replace(/\//g, '\\'));
 				if(!fs.existsSync(outPath)) fs.mkdirSync(outPath);
-				outPath = path.join(outPath, path.basename(current.file).replace(/\//g, '\\'));
+				outPath = path.join(outPath, (current.disk+'-'+current.track+'-'+current.title+path.extname(current.file)).replace(/\//g, '\\'));
 				if(outPath != current.file) {
 					console.log('Move: #'+ (i+1) +' '+ current.file);
 					fs.renameSync(current.file, outPath);
