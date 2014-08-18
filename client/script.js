@@ -329,7 +329,7 @@ function getAlbums() {
 //Socket Init
 socket.on('socket created', function(initData){
 	sessionID = socket.io.engine.id;
-	if(initData.hostname) {
+	if(initData.hostname != '') {
 		YUI().use('node', function(Y) {
 			Y.one('title').setHTML('Yui @ '+ initData.hostname);
 			Y.one('#menu').setHTML('<span style="font-size: 16px;">Yui | </span>Web-based Music Library / Player @ '+ initData.hostname);
@@ -342,7 +342,7 @@ socket.on('socket created', function(initData){
 		});
 	});
 	var hash = decodeURI(location.hash).replace(/^[#]/i, '');
-	if(hash === '') hash = 'New: ';
+	if(hash === '' && initData.defaultGenre != '') hash = initData.defaultGenre +': ';
 	console.log('[Socket] Request Init: '+ hash);
 	transportSearch(hash);
 });

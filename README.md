@@ -6,29 +6,44 @@ Web-based Music Library / Player
 With the myriads of music players avalible today, one may beg the question why we need yet another one. Well, the answer is a simple, none of the existing solutions avalible were able to satisfly my needs. A bit about myself - I'm a computer engineering student with little experence in programmin but loves music and audio in general, because of this my library of CDs (and electronic copies of those CDs) have piled up quite a bit... so much so that it has become a bit of a burden to keep everything in the laptop that I have with me at all times. As a result, I decided to put all of my music on a network drive but that didn't work very well music library managers. This is where my music comes into play, where audio played through a web-based interface.
 
 ##Prerequisites:
-nodejs 0.10.26<br />
-ffmpeg 2.2.4<br />
+nodejs <br />
+MariaDB or MySQL server <br />
+ffmpeg 2.x <br />
 7z (for album download only)<br />
 Other dependencies should be installed by running "npm install" in the working directory.<br />
 A file named "settings.json" should be placed in the working directory.<br />
 Example settings.json content:<br />
 ```
 {
-	"httpPort": "8080",
-	"subDomain": "/",
-	"musicDir": "/path/to/my_music/",
-	"databasePath": "./library.db",
+	"httpPort": "39564",
+	"musicDir": "/path/to/music/",
 	"logPath": "./yui.log",
 	"imgPath": "./img/_default.jpg",
 	"imgDir": "./img/",
-	"allowDownload": "yes",
-	"useAuth": "yes",
-	"username": "public",
-	"password": "some-pass"
+	"client": {
+		"allowDownload": "yes",
+		"hostname": "localhost",
+		"defaultGenre": "Rock"
+	},
+	"db": {
+		"host": "127.0.0.1",
+		"db": "yui",
+		"username": "foo",
+		"password": "bar"
+	},
+	"auth": {
+		"use": "no",
+		"username": "foo",
+		"password": "bar"
+	}
 }
 ```
-"imgPath" is the path to the default album image used by the player.<br />
-"imgDir" is where all the album artwork will be stored.<br />
+`imgPath` is the path to the default album image used by the player.<br />
+`imgDir` is where all the album artwork will be stored.<br />
+`client.hostname` is a hostname that will be displayed in the client interface, input empty string to disable feature.<br />
+`client.defaultGenre` music of this genre will be loaded to clients on connect, this prevents long loading times. Input empty string to load all music on connection.<br />
+`db` configures the database connection, `db.db` and `db.username` must be created on the server beforehand.<br />
+`auth.use` determines of HTTP basic authentication will be used, `auth.username` and `auth.password` has no effect if `auth.use` is not set to 'yes'.<br />
 
 ##Usage:<br />
 To build the music database for the first time, use: `node main.js (-b|-build)`<br />

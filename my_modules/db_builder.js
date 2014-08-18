@@ -5,7 +5,7 @@
  */
 
 //Modules -------------------------------------------------------------------
-var sqlite3 = require('../node_modules/sqlite3').verbose();
+var maria = require('../node_modules/mariasql');
 var find = require('../node_modules/findit');
 var fs = require('../node_modules/graceful-fs');
 var crc = require('../node_modules/crc');
@@ -24,14 +24,13 @@ function Metadata(imgPath) {
 
 //Functions ---------------------------------------------------------------------
 
-function processFile(scanResult, currentFileIndex, settings, db, callback) {
+function processFile(scanResult, currentFileIndex, settings, sql, callback) {
 	var trackID = scanResult[currentFileIndex].id
 	// path to metadata files from ffmpeg
 	var metaPath = process.cwd() +'/temp/'+ trackID +'.txt';
 	// Get metadata using ffmpeg
 	var ffmpegMeta = childProcess.spawn('ffmpeg', ['-i', scanResult[currentFileIndex].path, '-y', '-f', 'ffmetadata', metaPath]);
 	var ffmpegMetaOut = '';
-	ffmpegMeta.stdout.setEncoding('utf8');
 	ffmpegMeta.stderr.setEncoding('utf8');
 	ffmpegMeta.stderr.on('data', function(data) {
 		ffmpegMetaOut += data + '\n';
@@ -79,39 +78,40 @@ function processFile(scanResult, currentFileIndex, settings, db, callback) {
 					console.log('[ffmpeg] Error getting Album Art!');
 				}
 				// Check if song already exist by matching title and album
-				db.get("SELECT title FROM music WHERE title='"+ metadata.title.replace(/\'/g, "''") +
-						"' AND album='"+ metadata.album.replace(/\'/g, "''") +"' AND artist='"+ 
-						metadata.artist.replace(/\'/g, "''") +"'", function(err, data) {
-					if(err) {
-						console.error(err);
-					}
-					db.serialize(function() {
-						// Delete song from DB if already exists
-						if(data) {
-							console.log('[SQL] Replacing '+metadata.title);
-							db.run("DELETE FROM music WHERE title='"+ metadata.title.replace(/\'/g, "''") +
-									"' AND album='"+ metadata.album.replace(/\'/g, "''") +"'");												
-						}
-						// Add song to database
-						db.run(	"INSERT INTO music (file, title, artist, album, genre, track, disk, albumId, id) VALUES (" +
-								"'" + scanResult[currentFileIndex].path.replace(/\'/g, "''")	+ "'," + 
-								"'" + metadata.title.replace(/\'/g, "''")						+ "'," + 
-								"'" + metadata.artist.replace(/\'/g, "''")						+ "'," + 
-								"'" + metadata.album.replace(/\'/g, "''")						+ "'," + 
-								"'" + metadata.genre.replace(/\'/g, "''")						+ "'," + 
-								"'" + metadata.track											+ "'," +
-								"'" + metadata.disk												+ "'," +
-								"'" + albumID													+ "'," +
-								"'" + trackID													+ "')"
-								, function(err) {
-							if(err) {
+				sql.query("SELECT title FROM music WHERE title=? AND album=? AND artist=?",
+						[metadata.title.replace(/\'/g, "\'"), 
+						 metadata.album.replace(/\'/g, "\'"), 
+						 metadata.artist.replace(/\'/g, "\'")])
+						.on('result', function(result) {
+							result.on('error', function(err) {
 								console.error(err);
-							}
+							})
+							.on('row', function(row) {
+								// Delete song from DB if already exists
+								console.log('[SQL] Replacing '+metadata.title);
+								sql.query("DELETE FROM music WHERE title=? AND album=? AND artist=?", 
+										[metadata.title.replace(/\'/g, "\'"), 
+										 metadata.album.replace(/\'/g, "\'"), 
+										 metadata.artist.replace(/\'/g, "\'")]);
+							});
+						})
+						.on('end', function() {
+							// Add song to database
+							sql.query("INSERT INTO music (file, title, artist, album, genre, track, disk, albumId, id) "
+									+ "VALUES (:file, :title, :artist, :album, :genre, :track, :disk, :albumId, :id)", {
+										file:	scanResult[currentFileIndex].path.replace(/\'/g, "\'"),
+										title:	metadata.title.replace(/\'/g, "\'"),
+										artist:	metadata.artist.replace(/\'/g, "\'"),
+										album:	metadata.album.replace(/\'/g, "\'"),
+										genre:	metadata.genre.replace(/\'/g, "\'"),
+										track:	metadata.track,
+										disk:	metadata.disk,
+										albumId: albumID,
+										id: trackID,
+									});
 							console.log("[SQL] Add Entry #"+ (scanResult.length - currentFileIndex) +": "+ trackID);
 							NextFile();
 						});
-					});
-				});	
 			});
 		}
 		function NextFile() {
@@ -124,7 +124,7 @@ function processFile(scanResult, currentFileIndex, settings, db, callback) {
 			// process next file
 			currentFileIndex--;
 			if(currentFileIndex >= 0) {
-				processFile(scanResult, currentFileIndex, settings, db, callback);
+				processFile(scanResult, currentFileIndex, settings, sql, callback);
 			} else {
 				callback();
 			}
@@ -136,18 +136,39 @@ function processFile(scanResult, currentFileIndex, settings, db, callback) {
 
 //--- Update Database ---
 exports.update = function(settings) {
-	// Check database exists
-	if(fs.existsSync(settings.databasePath)) {
-		var db = new sqlite3.Database(settings.databasePath);
+	// Connect to DB
+	var sql = new maria();
+	sql.connect({
+		host: settings.db.host,
+		db: settings.db.db,
+		user: settings.db.username,
+		password: settings.db.password
+	});
+	sql.on('error', function(err) {
+		console.error(err);
+	})
+	.on('close', function() {
+		process.exit(0);
+	})
+	.on('connect', function() {
 		// setup build time counter
 		var processingTime = 0;
 		var timer = setInterval(function() {
 			processingTime += 0.01;
 		}, 10);
 		console.log('[SQL] Updating Database...');
-		// list of existing track IDs
-		db.all("SELECT id FROM music ORDER BY id", function(err, idList) {
-			if(err) console.error(err);
+		// Dump all existing track IDs
+		var idList = [];
+		sql.query("SELECT id FROM music ORDER BY id")
+		.on('result', function(result) {
+			result.on('error', function(err) {
+				console.error(err);
+			})
+			.on('row', function(row) {
+				idList.push(row);
+			});
+		})
+		.on('end', function() {
 			// start searching filesystem for audio files...
 			console.log('[FS] Search Begin...');
 			var scanResult = [];
@@ -206,77 +227,64 @@ exports.update = function(settings) {
 						}
 					}
 					// Delete Entries
-					db.serialize(function() {
-						DeleteFiles();
-						function DeleteFiles() {
-							if(idList.length > 0) {
-								db.run("DELETE FROM music WHERE id='"+ idList[0].id +"'", function(err) {
-									console.log('[SQL] Delete Entry: '+ idList[0].id);
-									if(err) console.error(err);
-									idList.shift();
-									DeleteFiles();
-								});
-							} else {
-								AddFiles();
-							}
-						}
-					});
-					// Add Entries
-					function AddFiles() {
-						if(scanResult.length > 0) {
-							// Process files
-							processFile(scanResult, scanResult.length - 1, settings, db, function() {
-								clearTimeout(timer);
-								console.log('Total running time: '+ (Math.floor(processingTime*100)/100) +' sec');
-								console.log('[SQL] Database update complete!');
-								db.close(function(err) {
-									if(err) console.error(err);
-									process.exit(0);
-								});
-							});
-						} else {
-							console.log('[SQL] No changes made.');
-							db.close(function(err) {
-								if(err) console.error(err);
-								process.exit(0);
-							});
-						} 
+					while(idList.length > 0) {
+						console.log('Delete Entry #'+ idList.length +': '+ idList[idList.length - 1].id);
+						sql.query("DELETE FROM music WHERE id = ?", [idList[idList.length - 1].id]);
+						idList.pop();
+					}
+					if(scanResult.length > 0) {
+						// Process files
+						processFile(scanResult, scanResult.length - 1, settings, sql, function() {
+							clearTimeout(timer);
+							console.log('Total running time: '+ (Math.floor(processingTime*100)/100) +' sec');
+							console.log('[SQL] Database update complete!');
+							sql.end();
+						});
+					} else {
+						console.log('[SQL] Database update complete!');
+						sql.end();
 					}
 				});
-			});
+			});	
 		});
-	} else {
-		console.error('Database file: '+ settings.databasePath +' does not exist!');
-		process.exit(0);
-	}
+	});
 }
 
 //--- Build Database ---
 exports.build = function (settings) {
-	// if database file exists, delete it.
-	if(fs.existsSync(settings.databasePath)) {
-		fs.unlinkSync(settings.databasePath);
-	}
-	var db = new sqlite3.Database(settings.databasePath);
-	// setup build time counter
-	var processingTime = 0;
-	var timer = setInterval(function() {
-		processingTime += 0.01;
-	}, 10);
-	console.log('[SQL] Buliding Database...');
-	// Create new data table in DB
-	db.run("CREATE TABLE music (" +
-			"file		VARCHAR(255)," +
-			"title		VARCHAR(255)," +
-			"artist		VARCHAR(255)," +
-			"album		VARCHAR(255)," +
-			"genre		VARCHAR(255)," +
-			"track		TINYINT(3)," +
-			"disk		TINYINT(3)," +
-			"albumId	VARCHAR(255)," +
-			"id			VARCHAR(255) )",
-			function(err) {
-		if(err) console.error(err);
+	// Connect to DB
+	var sql = new maria();
+	sql.connect({
+		host: settings.db.host,
+		db: settings.db.db,
+		user: settings.db.username,
+		password: settings.db.password
+	});
+	sql.on('error', function(err) {
+		console.error(err);
+	})
+	.on('close', function() {
+		process.exit(0);
+	})
+	.on('connect', function() {
+		// setup build time counter
+		var processingTime = 0;
+		var timer = setInterval(function() {
+			processingTime += 0.01;
+		}, 10);
+		console.log('[SQL] Buliding Database...');
+		sql.query("DROP TABLE IF EXISTS music");
+		sql.query("CREATE TABLE music (" +
+				"file		VARCHAR(255)," +
+				"title		VARCHAR(255)," +
+				"artist		VARCHAR(255)," +
+				"album		VARCHAR(255)," +
+				"genre		VARCHAR(255)," +
+				"track		TINYINT UNSIGNED," +
+				"disk		TINYINT UNSIGNED," +
+				"albumId	CHAR(8)," +
+				"id			CHAR(8) )" +
+				"CHARACTER SET 'utf8'");
 		// start searching filesystem for audio files...
 		console.log('[FS] Search Begin...');
 		var scanResult = [];
@@ -297,12 +305,11 @@ exports.build = function (settings) {
 					id: trackID,
 					path: filePath
 				});
-				console.log('[FS] file #'+scanResult.length+' : '+filePath.replace(settings.musicDir,'/'));
 			}
 		});
 		finder.on('end', function() {
 			// file search complete, start extracting data...
-			console.log('[FS] Scan Complete!');
+			console.log('[FS] Scan Complete, Found: ' + scanResult.length);
 			var currentFileIndex = scanResult.length - 1;
 			// Delete all files in temp folder
 			var remover = find(process.cwd() +'/temp/');
@@ -318,14 +325,11 @@ exports.build = function (settings) {
 			});
 			remover.on('end', function() {
 				// temp folder emptied, process each file in [scanResult] array in a recursion loop about function [processFile()]
-				processFile(scanResult, scanResult.length - 1, settings, db, function() {
+				processFile(scanResult, scanResult.length - 1, settings, sql, function() {
 					clearTimeout(timer);
 					console.log('Total running time: '+ (Math.floor(processingTime*100)/100) +' sec');
 					console.log('[SQL] Database build complete!');
-					db.close(function(err) {
-						if(err) console.error(err);
-						process.exit(0);
-					});
+					sql.end();
 				});
 			});
 		});
