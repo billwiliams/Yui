@@ -8,11 +8,10 @@ var maria = require('mariasql');
 var fs = require('graceful-fs');
 var fsPath = require('path');
 var crc = require('crc');
-var childProcess = require('child_process');
 var querystring = require('querystring');
 //My Modules -------------------------------------------------------------------
 var dbBuilder = require('./my_modules/db_builder.js');
-var dlCreator = require('./my_modules/dl_creator.js');
+var cliTools = require('./my_modules/cli_tools.js');
 var fsOrganizer = require('./my_modules/fs_organizer.js');
 
 //Setup -------------------------------------------------------------------
@@ -131,9 +130,6 @@ sql.on('error', function(err) {
 			res.download(path, function(err) {
 				logger.write('('+ new Date().toString() +') '+'[HTTP] Download complete: '+ path +'\n');
 				if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
-				fs.unlink(path, function(err) {
-					if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
-				});
 			});
 		} else {
 			// handel other file requests 
@@ -152,15 +148,15 @@ sql.on('error', function(err) {
 			genreList: genreList
 		});
 		// Client fields
-		var activeAudioFile = null;
+		var clientFiles = [];
 		var activeFilters = '';
 		var dlPreparing = false;
 		// Delete audio file on disconnect
 		socket.on('disconnect', function() {
-			if(activeAudioFile) fs.unlink(activeAudioFile, function(err){
-				if(err) logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
-				activeAudioFile = null;
-			});
+			while(clientFiles.length > 0) {
+				fs.unlinkSync(clientFiles[clientFiles.length - 1]);
+				clientFiles.pop();
+			}
 		});
 		// Download album request
 		socket.on("request download", function(albumId) {
@@ -178,8 +174,9 @@ sql.on('error', function(err) {
 					});
 				})
 				.on('end', function() {
-					dlCreator.create(files, albumId, function(path) {
+					cliTools.createZip(files, albumId, logger, function(path) {
 						dlPreparing = false;
+						clientFiles.push(fsPath.join('./temp', path));
 						socket.emit('download link', {
 							path: fsPath.join('dl', path),
 							albumId: albumId
@@ -202,7 +199,7 @@ sql.on('error', function(err) {
 		socket.on("request playlist", function(id) {
 			var packet = [];
 			packet.push(id);
-			sql.query("SELECT track,disk,title,artist,id FROM music WHERE album = (SELECT album FROM music WHERE id=?)", [id])
+			sql.query("SELECT track,disk,title,artist,id FROM music WHERE album = (SELECT album FROM music WHERE id=?) ORDER BY track", [id])
 			.on('result', function(res) {
 				res.on('row', function(row) {
 					packet.push(row);
@@ -225,61 +222,19 @@ sql.on('error', function(err) {
 				.on('row', function(trackData) {
 					logger.write('('+ new Date().toString() +') '+'[Socket] Request Track ['+id+'] '+trackData.title +'\n');
 					// send track metadata
-					var ffprobe = childProcess.spawn('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', trackData.file]);
-					var ffprobeOut = '';
-					ffprobe.stdout.setEncoding('utf8');
-					ffprobe.stdout.on('data', function(data) {
-						ffprobeOut += data + '\n';
-					});
-					ffprobe.on('close', function(code) {
-						var probeData = JSON.parse(ffprobeOut);
-						probeData = probeData.streams[0];
-						var imgData = '';
-						var imgPath = settings.imgDir + trackData.albumId + '.jpg';
-						if(fs.existsSync(imgPath)) {
-							imgData = fs.readFileSync(imgPath).toString('base64');
-						}
-						socket.emit('track info', {
-							image: imgData,
-							Title: trackData.title,
-							Album: trackData.album,
-							Artist: trackData.artist,
-							Genre: trackData.genre,
-							File: fsPath.basename(trackData.file),
-							Codec: probeData.codec_long_name,
-							BitRate: probeData.bit_rate,
-							Format: probeData.sample_fmt,
-							SampleRate: probeData.sample_rate,
-							Channel: probeData.channel_layout
-						});
-					});
-					// prepare path for new audio file 
+					cliTools.getMeta(settings, trackData, function(metadata) {
+						socket.emit('track info', metadata);
+                    }); 
+					// create uncompressed audio file
 					var timeStamp = new Date().getTime().toString(16);
-					var destPath = './temp/'+id+'-'+timeStamp+'.wav';
-					if(activeAudioFile) {
-						fs.unlinkSync(activeAudioFile);
-					}
-					activeAudioFile = destPath;
-					// create new audio file with ffmpeg
-					var ffmpeg = childProcess.spawn('ffmpeg', ['-i', trackData.file, '-y', destPath]);
-					var buffer = '';
-					ffmpeg.stdout.setEncoding('utf8');
-					ffmpeg.stderr.setEncoding('utf8');
-					ffmpeg.stderr.on('data', function(data) {
-						buffer += data + '\n';
-					});
-					ffmpeg.on('close', function(code) {
-						if(code) {
-							logger.write('('+ new Date().toString() +') '+'[ffmpeg] Error:' +'\n');
-							logger.write('('+ new Date().toString() +') '+buffer +'\n');
-						} else {
-							// send link to new audio file
-							socket.emit('track data', {
-								file: destPath.replace('./temp/', '').replace(/\.wav/i, ''),
-								title: trackData.title
-							});
-						}
-					});
+					cliTools.createWav(trackData.file, (id+'-'+timeStamp), logger, function(destPath, fileName) {
+						clientFiles.push(destPath);
+						// send link to new audio file
+						socket.emit('track data', {
+							file: fileName,
+							title: trackData.title
+						});
+                    });
 				});
 			});
 		});
