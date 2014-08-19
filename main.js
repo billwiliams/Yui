@@ -7,7 +7,6 @@ var io = require('socket.io')(http);
 var maria = require('mariasql');
 var fs = require('graceful-fs');
 var fsPath = require('path');
-var crc = require('crc');
 var querystring = require('querystring');
 //My Modules -------------------------------------------------------------------
 var dbBuilder = require('./my_modules/db_builder.js');
@@ -74,7 +73,7 @@ sql.on('error', function(err) {
 	// Get Genres
 	var genreRegex = '';
 	var genreList = [];
-	sql.query("SELECT DISTINCT genre FROM music")
+	sql.query("SELECT DISTINCT genre FROM album")
 	.on('result', function(res) {
 		res.on('row', function(row) {
 			genreList.push(row.genre);
@@ -199,7 +198,8 @@ sql.on('error', function(err) {
 		socket.on("request playlist", function(id) {
 			var packet = [];
 			packet.push(id);
-			sql.query("SELECT track,disk,title,artist,id FROM music WHERE album = (SELECT album FROM music WHERE id=?) ORDER BY track", [id])
+			sql.query("SELECT track,disk,title,artist,id FROM music " +
+					"WHERE albumId = (SELECT albumId FROM music WHERE id=? LIMIT 1) ORDER BY track", [id])
 			.on('result', function(res) {
 				res.on('row', function(row) {
 					packet.push(row);
@@ -214,7 +214,7 @@ sql.on('error', function(err) {
 		});
 		// Prepare audio file for playback
 		socket.on("request track", function(id) {
-			sql.query("SELECT title,album,albumId,artist,genre,file FROM music WHERE id=?", [id])
+			sql.query("SELECT * FROM music LEFT JOIN album ON music.albumId = album.albumId WHERE id=?", [id])
 			.on('result', function(res) {
 				res.on('error', function(err) {
 					logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
@@ -222,9 +222,18 @@ sql.on('error', function(err) {
 				.on('row', function(trackData) {
 					logger.write('('+ new Date().toString() +') '+'[Socket] Request Track ['+id+'] '+trackData.title +'\n');
 					// send track metadata
-					cliTools.getMeta(settings, trackData, function(metadata) {
-						socket.emit('track info', metadata);
-                    }); 
+					socket.emit('track info', {
+						image: new Buffer(trackData.image, 'binary').toString('base64'),
+						Title: trackData.title,
+						Album: trackData.album,
+						Artist: trackData.artist,
+						Genre: trackData.genre,
+						File: fsPath.basename(trackData.file),
+						Codec: trackData.codec,
+						BitRate: trackData.bitRate,
+						Format: trackData.format,
+						SampleRate: trackData.sampleRate
+					});
 					// create uncompressed audio file
 					var timeStamp = new Date().getTime().toString(16);
 					cliTools.createWav(trackData.file, (id+'-'+timeStamp), logger, function(destPath, fileName) {
@@ -242,20 +251,24 @@ sql.on('error', function(err) {
 		socket.on('search', function(search) {
 			var genreFilter = search.match(genreRegex);
 			search = search.replace(genreRegex, '');
-			var query = "SELECT DISTINCT album,albumId FROM music WHERE ";
-			var msg = '"'+ search +'"';
+			var query, msg = '"'+ search +'"';
 			if(genreFilter) {
 				genreFilter = genreFilter[0].replace(/:\s$/i, '');
-				query += "genre LIKE '"+ genreFilter +"' AND ";
+				query = "SELECT album,albumId FROM album WHERE genre LIKE :genre AND " +
+				"(album LIKE :search OR albumId=(SELECT albumId FROM music WHERE " +
+				"title LIKE :search OR artist LIKE :search)) ORDER BY album";
 				msg += ' in "'+ genreFilter +'"';
+			} else {
+				query = "SELECT album,albumId FROM album WHERE album LIKE :search OR " +
+				"albumId=(SELECT albumId FROM music WHERE title LIKE :search OR artist LIKE :search) " +
+				"ORDER BY album";
 			}
-			query += "( title LIKE '%"+ search.replace(/\'/g, "\'") +"%' OR ";
-			query += "album LIKE '%"+ search.replace(/\'/g, "\'") +"%' OR ";
-			query += "artist LIKE '%"+ search.replace(/\'/g, "\'") +"%' ) ";
-			query += "ORDER BY album";
 			logger.write('('+ new Date().toString() +') '+'[Socket] Search: '+ msg +'\n');
 			var result = [];
-			sql.query(query)
+			sql.query(query, {
+				genre: genreFilter,
+				search: '%'+search+'%'
+			})
 			.on('result', function(res) {
 				res.on('row', function(row) {
 					result.push(row);
@@ -276,24 +289,24 @@ sql.on('error', function(err) {
 		// get album
 		socket.on("get album", function(albumID) {
 			var albumPacket = [];
-			var imgData;
-			var imgPath = settings.imgDir + albumID + '.jpg';
-			if(fs.existsSync(imgPath)) {
-				imgData = fs.readFileSync(imgPath).toString('base64');
-			} else {
-				imgData = fs.readFileSync(settings.imgPath).toString('base64');
-			}
-			albumPacket.push({
-				albumId: albumID,
-				image: imgData
+			sql.query("SELECT image FROM album WHERE albumId=?", [albumID])
+			.on('result', function(res) {
+				res.on('row', function(row) {
+					albumPacket.push({
+						albumId: albumID,
+						image: new Buffer(row.image, 'binary').toString('base64')
+					});
+				})
+				.on('error', function(err) {
+					logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
+				})
 			});
-			var query = "SELECT title,artist,track,disk,id FROM music ";
-			query += "WHERE albumId='"+ albumID +"' AND ( ";
-			query += "album LIKE '%"+ activeFilters +"%' OR ";
-			query += "title LIKE '%"+ activeFilters +"%' OR ";
-			query += "artist LIKE '%"+ activeFilters +"%' ) ";
-			query += "ORDER BY track";
-			sql.query(query)
+			var query = "SELECT title,artist,track,disk,id FROM music WHERE albumId = :albumId " +
+			"AND (title LIKE :filter OR artist LIKE :filter) ORDER BY track";
+			sql.query(query, {
+				albumId: albumID,
+				filter: '%'+activeFilters+'%'
+			})
 			.on('result', function(res) {
 				res.on('row', function(row) {
 					albumPacket.push(row);

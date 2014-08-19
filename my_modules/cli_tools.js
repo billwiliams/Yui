@@ -34,34 +34,3 @@ exports.createWav = function(filePath, outputName, logger, callback) {
 		}
 	});
 }
-
-exports.getMeta = function(settings, trackData, callback) {
-	var ffprobe = childProcess.spawn('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', trackData.file]);
-	var ffprobeOut = '';
-	ffprobe.stdout.setEncoding('utf8');
-	ffprobe.stdout.on('data', function(data) {
-		ffprobeOut += data + '\n';
-	});
-	ffprobe.on('close', function(code) {
-		var probeData = JSON.parse(ffprobeOut);
-		probeData = probeData.streams[0];
-		var imgData = '';
-		var imgPath = settings.imgDir + trackData.albumId + '.jpg';
-		if(fs.existsSync(imgPath)) {
-			imgData = fs.readFileSync(imgPath).toString('base64');
-		}
-		callback({
-			image: imgData,
-			Title: trackData.title,
-			Album: trackData.album,
-			Artist: trackData.artist,
-			Genre: trackData.genre,
-			File: fsPath.basename(trackData.file),
-			Codec: probeData.codec_long_name,
-			BitRate: probeData.bit_rate,
-			Format: probeData.sample_fmt,
-			SampleRate: probeData.sample_rate,
-			Channel: probeData.channel_layout
-		});
-	});
-}

@@ -242,17 +242,11 @@ socket.on('track info', function(meta) {
 		Y.one('#track-album').setContent(meta.Album);
 		var table = '<h4 style="position:relative; top:10px; left:10px; margin-top:0px;">Media Info:</h4><table>';
 		for (var key in meta) {
-			if(key === 'Format') {
-				meta[key] = meta[key].replace('s', 'Signed ').replace('u', 'Unsigned ') + '-bit';
-				if(/p/i.test(meta[key])) {
-					meta[key] = meta[key].replace('p', '') + ', Planar';
-				}
-			}
 			if(key === 'SampleRate') {
-				meta[key] = (parseInt(meta[key],10)/1000) +' kHz';
+				meta[key] = (meta[key]/1000) +' kHz';
 			}
 			if(key === 'BitRate') {
-				meta[key] = (parseInt(meta[key],10)/1000) +' kbit/s';
+				meta[key] = (meta[key]/1000) +' kbit/s';
 			}
 			if(key != 'image') {
 				table += '<tr><td style="padding: 5px 10px 5px;">' + key + ': </td><td>' + meta[key] + '</td></tr>';

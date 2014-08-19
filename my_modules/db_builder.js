@@ -13,114 +13,108 @@ var fsPath = require('path');
 var childProcess = require('child_process');
 
 //Constructors -------------------------------------------------------------------
-function Metadata(imgPath) {
+function musicEntry() {
+	this.file = null;
 	this.title = 'Untitled';
 	this.artist = 'Unknown Artist';
-	this.album = 'Unknown Album';
-	this.genre = 'Unknown Genre';
+	this.codec = null;
+	this.format = null;
+	this.bitRate = null;
+	this.sampleRate = null;
 	this.track = 1;
 	this.disk = 0;
+	this.albumId = null;
+	this.id = null;
 }
+function albumEntry() {
+	this.albumId = null;
+	this.album = 'Unknown Album';
+	this.genre = 'Unknown Genre';
+	this.image = null;
+}
+
 
 //Functions ---------------------------------------------------------------------
 
 function processFile(scanResult, currentFileIndex, settings, sql, callback) {
-	var trackID = scanResult[currentFileIndex].id
-	// path to metadata files from ffmpeg
-	var metaPath = process.cwd() +'/temp/'+ trackID +'.txt';
-	// Get metadata using ffmpeg
-	var ffmpegMeta = childProcess.spawn('ffmpeg', ['-i', scanResult[currentFileIndex].path, '-y', '-f', 'ffmetadata', metaPath]);
-	var ffmpegMetaOut = '';
-	ffmpegMeta.stderr.setEncoding('utf8');
-	ffmpegMeta.stderr.on('data', function(data) {
-		ffmpegMetaOut += data + '\n';
+	var current = scanResult[currentFileIndex];
+	// Get metadata using ffprobe
+	var ffprobe = childProcess.spawn('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', current.path]);
+	var ffprobeOut = '';
+	ffprobe.stdout.setEncoding('utf8');
+	ffprobe.stdout.on('data', function(data) {
+		ffprobeOut += data + '\n';
 	});
-	ffmpegMeta.on('close', function(code) {
-		// check ffmpeg exit code, report error if not 0.
+	ffprobe.on('close', function(code) {
 		if(code) {
-			console.log('[ffmpeg] Metadata Error!');
-			console.log(scanResult[currentFileIndex].path + 'Not Added!');
+			console.log('[ffprobe] Error reading metadata!');
+			console.log(current.path + 'Not Added!');
 			NextFile();
 		} else {
-			// read metadata from txt file
-			var musicMetadata = fs.readFileSync(metaPath, 'utf8');
-			var metadata = new Metadata(settings.imgPath);
-			var scannedData = new Metadata(settings.imgPath);
-			scannedData.title = musicMetadata.match(/(?=title\=)(.*)/i);
-			scannedData.album = musicMetadata.match(/(?=album\=)(.*)/i);
-			scannedData.artist = musicMetadata.match(/(?=artist\=)(.*)/i);
-			scannedData.genre = musicMetadata.match(/(?=genre\=)(.*)/i);
-			scannedData.disk = musicMetadata.match(/(?=disc\=)(.*)/i);
-			scannedData.track = musicMetadata.match(/(?=track\=)(.*)/i);
-			if(scannedData.title) metadata.title = scannedData.title[0].replace(/title=/i, '');
-			if(scannedData.album) metadata.album = scannedData.album[0].replace(/album=/i, '');
-			if(scannedData.artist) metadata.artist = scannedData.artist[0].replace(/artist=/i, '');
-			if(scannedData.genre) metadata.genre = scannedData.genre[0].replace(/genre=/i, '');
-			if(scannedData.disk) {
-				metadata.disk = scannedData.disk[0].replace(/disc=/i, '').replace(/(?=\/)(.*)/i, '');
-				metadata.disk = parseInt(metadata.disk, 10);
-			}
-			if(scannedData.track) {
-				metadata.track = scannedData.track[0].replace(/track=/i, '').replace(/(?=\/)(.*)/i, '');
-				metadata.track = parseInt(metadata.track, 10);
-			}
-			var albumID = crc.crc32(metadata.album + fsPath.dirname(scanResult[currentFileIndex].path));
-			var imgPath = settings.imgDir + albumID + '.jpg';
-			// Convert album image using ffmpeg
-			var ffmpegImg = childProcess.spawn('ffmpeg', ['-i', scanResult[currentFileIndex].path, '-y', '-vf', 'scale=-1:400', imgPath]);
-			var ffmpegImgOut = '';
-			ffmpegImg.stderr.setEncoding('utf8');
-			ffmpegImg.stderr.on('data', function(data) {
-				ffmpegImgOut += data + '\n';
-			});
-			ffmpegImg.on('close', function(code) {
-				if(code) {
-					console.log('[ffmpeg] Error getting Album Art!');
+			// Parse ffprobe output
+			var probeOutput = JSON.parse(ffprobeOut);
+			var probeStream = probeOutput.streams[0];
+			var probeTags = probeOutput.format.tags;
+			var albumID = crc.crc32(probeTags.album + fsPath.dirname(current.path));
+			var musicMeta = new musicEntry();
+			var albumMeta = new albumEntry();
+			musicMeta.file = current.path;
+			if(probeTags.title)				musicMeta.title = probeTags.title.replace(/\'/g, "\'");
+			if(probeTags.artist)			musicMeta.artist = probeTags.artist.replace(/\'/g, "\'");
+			if(probeStream.codec_long_name)	musicMeta.codec = probeStream.codec_long_name.replace(/\'/g, "\'");
+			if(probeStream.sample_fmt)		musicMeta.format = probeStream.sample_fmt.replace('s', 'Signed ').replace('u', 'Unsigned ') + '-bit';
+			if(/p/i.test(musicMeta.format))	musicMeta.format = musicMeta.format.replace('p', '') + ', Planar';
+			if(probeStream.bit_rate)		musicMeta.bitRate = parseInt(probeStream.bit_rate, 10);
+			if(probeStream.sample_rate)		musicMeta.sampleRate = parseInt(probeStream.sample_rate, 10);
+			if(probeTags.track)				musicMeta.track = parseInt(probeTags.track.replace(/(?=\/)(.*)/i, ''), 10);
+			// NOTE: ffprobe outputs 'disc' instead of 'disk'!
+			if(probeTags.disc)				musicMeta.disk = parseInt(probeTags.disc.replace(/(?=\/)(.*)/i, ''), 10);
+			musicMeta.albumId = albumID;
+			musicMeta.id = current.id;
+			// Check for existing album info
+			var albumExists = null;
+			sql.query("SELECT 1=1 FROM album WHERE albumId=?", [albumID])
+			.on('result', function(result) {
+				result.on('error', function(err) {console.error(err);})
+				.on('row', function(row) {albumExists = row;});
+			})
+			.on('end', function() {
+				if(!albumExists) {
+					// Get album image using ffmpeg
+					var imageData = [];
+					var ffmpeg = childProcess.spawn('ffmpeg', ['-i', current.path, '-y', '-vf', 'scale=-1:500', 'pipe:1.jpg']);
+					ffmpeg.stdout.on('data', function(data) {
+						imageData.push(data);
+					});
+					ffmpeg.on('close', function(code) {
+						albumMeta.albumId = albumID;
+						if(probeTags.album) albumMeta.album = probeTags.album.replace(/\'/g, "\'");
+						if(probeTags.genre) albumMeta.genre = probeTags.genre.replace(/\'/g, "\'");
+						if(!code) {
+							imageData = Buffer.concat(imageData);
+							console.log("[SQL] Add Album: "+ albumMeta.album);
+							albumMeta.image = imageData.toString('hex');
+						} else {
+							console.log("[SQL] Add Album: [NO ARTWORK] "+ albumMeta.album);
+							albumMeta.image = fs.readFileSync(settings.imgPath).toString('hex');
+						}
+						sql.query("INSERT INTO album (albumId, album, genre, image) "
+								+ "VALUES (:albumId, :album, :genre, x:image)", albumMeta);
+						AddFile();
+					});
+				} else {
+					AddFile();
 				}
-				// Check if song already exist by matching title and album
-				sql.query("SELECT title FROM music WHERE title=? AND album=? AND artist=?",
-						[metadata.title.replace(/\'/g, "\'"), 
-						 metadata.album.replace(/\'/g, "\'"), 
-						 metadata.artist.replace(/\'/g, "\'")])
-						.on('result', function(result) {
-							result.on('error', function(err) {
-								console.error(err);
-							})
-							.on('row', function(row) {
-								// Delete song from DB if already exists
-								console.log('[SQL] Replacing '+metadata.title);
-								sql.query("DELETE FROM music WHERE title=? AND album=? AND artist=?", 
-										[metadata.title.replace(/\'/g, "\'"), 
-										 metadata.album.replace(/\'/g, "\'"), 
-										 metadata.artist.replace(/\'/g, "\'")]);
-							});
-						})
-						.on('end', function() {
-							// Add song to database
-							sql.query("INSERT INTO music (file, title, artist, album, genre, track, disk, albumId, id) "
-									+ "VALUES (:file, :title, :artist, :album, :genre, :track, :disk, :albumId, :id)", {
-										file:	scanResult[currentFileIndex].path.replace(/\'/g, "\'"),
-										title:	metadata.title.replace(/\'/g, "\'"),
-										artist:	metadata.artist.replace(/\'/g, "\'"),
-										album:	metadata.album.replace(/\'/g, "\'"),
-										genre:	metadata.genre.replace(/\'/g, "\'"),
-										track:	metadata.track,
-										disk:	metadata.disk,
-										albumId: albumID,
-										id: trackID,
-									});
-							console.log("[SQL] Add Entry #"+ (scanResult.length - currentFileIndex) +": "+ trackID);
-							NextFile();
-						});
+				function AddFile() {
+					// Add file to database
+					console.log("[SQL] Add File #"+ (scanResult.length - currentFileIndex) +": "+ fsPath.basename(current.path));
+					sql.query("INSERT INTO music (file, title, artist, codec, format, bitRate, sampleRate, track, disk, albumId, id) "
+							+ "VALUES (:file, :title, :artist, :codec, :format, :bitRate, :sampleRate, :track, :disk, :albumId, :id)", musicMeta);
+					NextFile();
+				}
 			});
 		}
 		function NextFile() {
-			// delete metadata file from temp folder
-			if(fs.existsSync(metaPath)) {
-				fs.unlink(metaPath, function(err) {
-					if(err) console.error(err);
-				});
-			}
 			// process next file
 			currentFileIndex--;
 			if(currentFileIndex >= 0) {
@@ -177,7 +171,7 @@ exports.update = function(settings) {
 				// stop build process on error
 				console.error(err);
 				finder.stop();
-				process.exit(0);
+				sql.end();
 			});
 			finder.on('file', function(filePath, stat) {
 				// test for audio file types
@@ -192,59 +186,44 @@ exports.update = function(settings) {
 				}
 			});
 			finder.on('end', function() {
-				// file search complete
 				console.log('[FS] Scan Complete, Found: ' + scanResult.length);
-				// Delete all files in temp folder
-				var remover = find(process.cwd() +'/temp/');
-				remover.on('file', function(filePath, stat) {
-					fs.unlink(filePath, function(err) {
-						if(err) console.error(err);
-					})
-				});
-				remover.on('error', function(err) {
-					console.error(err);
-					remover.stop();
-					process.exit(0);
-				});
-				remover.on('end', function() {
-					// determine unchanged entries
-					for (var i = 0; i < scanResult.length; i++) {
-						if(idList.length > 0) {
-							// binary search [idList] to find duplicate entries
-							var target = parseInt(scanResult[i].id, 16);
-							var min = 0, max = idList.length - 1;
-							var index = Math.floor((max+min)/2);
-							while(target != parseInt(idList[index].id, 16) && max > min) {
-								if(target > parseInt(idList[index].id, 16)) min = index + 1;
-								else if(target < parseInt(idList[index].id, 16)) max = index - 1;
-								index = Math.floor((max+min)/2);
-							}
-							if(target == parseInt(idList[index].id, 16)) {
-								scanResult.splice(i, 1);
-								idList.splice(index, 1);
-								i--;
-							}
+				// determine unchanged entries
+				for (var i = 0; i < scanResult.length; i++) {
+					if(idList.length > 0) {
+						// binary search [idList] to find duplicate entries
+						var target = parseInt(scanResult[i].id, 16);
+						var min = 0, max = idList.length - 1;
+						var index = Math.floor((max+min)/2);
+						while(target != parseInt(idList[index].id, 16) && max > min) {
+							if(target > parseInt(idList[index].id, 16)) min = index + 1;
+							else if(target < parseInt(idList[index].id, 16)) max = index - 1;
+							index = Math.floor((max+min)/2);
+						}
+						if(target == parseInt(idList[index].id, 16)) {
+							scanResult.splice(i, 1);
+							idList.splice(index, 1);
+							i--;
 						}
 					}
-					// Delete Entries
-					while(idList.length > 0) {
-						console.log('Delete Entry #'+ idList.length +': '+ idList[idList.length - 1].id);
-						sql.query("DELETE FROM music WHERE id = ?", [idList[idList.length - 1].id]);
-						idList.pop();
-					}
-					if(scanResult.length > 0) {
-						// Process files
-						processFile(scanResult, scanResult.length - 1, settings, sql, function() {
-							clearTimeout(timer);
-							console.log('Total running time: '+ (Math.floor(processingTime*100)/100) +' sec');
-							console.log('[SQL] Database update complete!');
-							sql.end();
-						});
-					} else {
+				}
+				// Delete Entries
+				while(idList.length > 0) {
+					console.log('Delete Entry #'+ idList.length +': '+ idList[idList.length - 1].id);
+					sql.query("DELETE FROM music WHERE id = ?", [idList[idList.length - 1].id]);
+					idList.pop();
+				}
+				if(scanResult.length > 0) {
+					// Process files
+					processFile(scanResult, scanResult.length - 1, settings, sql, function() {
+						clearTimeout(timer);
+						console.log('Total running time: '+ (Math.floor(processingTime*100)/100) +' sec');
 						console.log('[SQL] Database update complete!');
 						sql.end();
-					}
-				});
+					});
+				} else {
+					console.log('[SQL] Database update complete!');
+					sql.end();
+				}
 			});	
 		});
 	});
@@ -274,17 +253,27 @@ exports.build = function (settings) {
 		}, 10);
 		console.log('[SQL] Buliding Database...');
 		sql.query("DROP TABLE IF EXISTS music");
-		sql.query("CREATE TABLE music (" +
-				"file		VARCHAR(255)," +
-				"title		VARCHAR(255)," +
-				"artist		VARCHAR(255)," +
+		sql.query("DROP TABLE IF EXISTS album");
+		sql.query("CREATE TABLE album (" +
+				"albumId	CHAR(8) NOT NULL PRIMARY KEY," +
 				"album		VARCHAR(255)," +
 				"genre		VARCHAR(255)," +
+				"image		MEDIUMBLOB )" +
+		"CHARACTER SET 'utf8'");
+		sql.query("CREATE TABLE music (" +
+				"file		VARCHAR(255) UNIQUE," +
+				"title		VARCHAR(255)," +
+				"artist		VARCHAR(255)," +
+				"codec		VARCHAR(255)," +
+				"format		VARCHAR(255)," +
+				"bitRate	MEDIUMINT UNSIGNED," +
+				"sampleRate	MEDIUMINT UNSIGNED," +
 				"track		TINYINT UNSIGNED," +
 				"disk		TINYINT UNSIGNED," +
 				"albumId	CHAR(8)," +
-				"id			CHAR(8) )" +
-				"CHARACTER SET 'utf8'");
+				"id			CHAR(8) NOT NULL PRIMARY KEY," +
+				"CONSTRAINT fk_albumId FOREIGN KEY (albumId) REFERENCES album(albumId) )" +
+		"CHARACTER SET 'utf8'");
 		// start searching filesystem for audio files...
 		console.log('[FS] Search Begin...');
 		var scanResult = [];
@@ -293,7 +282,7 @@ exports.build = function (settings) {
 			// stop build process on error
 			console.error(err);
 			finder.stop();
-			process.exit(0);
+			sql.end();
 		});
 		finder.on('file', function(filePath, stat) {
 			// test for audio file types
@@ -310,28 +299,19 @@ exports.build = function (settings) {
 		finder.on('end', function() {
 			// file search complete, start extracting data...
 			console.log('[FS] Scan Complete, Found: ' + scanResult.length);
-			var currentFileIndex = scanResult.length - 1;
-			// Delete all files in temp folder
-			var remover = find(process.cwd() +'/temp/');
-			remover.on('file', function(filePath, stat) {
-				fs.unlink(filePath, function(err) {
-					if(err) console.error(err);
-				})
-			});
-			remover.on('error', function(err) {
-				console.error(err);
-				remover.stop();
-				process.exit(0);
-			});
-			remover.on('end', function() {
-				// temp folder emptied, process each file in [scanResult] array in a recursion loop about function [processFile()]
+			if(scanResult.length == 0) {
+				console.log('[SQL] Database build complete!');
+				sql.end();
+			} else {
+				var currentFileIndex = scanResult.length - 1;
+				// Process each file in [scanResult] array in a recursion loop about function [processFile()]
 				processFile(scanResult, scanResult.length - 1, settings, sql, function() {
 					clearTimeout(timer);
 					console.log('Total running time: '+ (Math.floor(processingTime*100)/100) +' sec');
 					console.log('[SQL] Database build complete!');
 					sql.end();
 				});
-			});
+			}
 		});
 	});
 }

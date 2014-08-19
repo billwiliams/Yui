@@ -50,7 +50,6 @@ To build the music database for the first time, use: `node main.js (-b|-build)`<
 To update database with new or removed files, use: `node main.js (-u|-update)`<br />
 To organize music in the filesystem, use: `node main.js (-o|-organize)`<br />
 To start using player, use: `node main.js`<br />
-*Note: when building or updating the database, files with the same title, album and artist tages will be treated the same and only 1 file will be added.
 
 ##Audio Files:<br />
 Supported formats: `mp3|m4a|aiff|aac|flac|wav|ape|ogg`<br />
