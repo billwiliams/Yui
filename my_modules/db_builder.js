@@ -23,7 +23,6 @@ function musicEntry() {
 	this.sampleRate = null;
 	this.track = 1;
 	this.disk = 0;
-	this.albumId = null;
 	this.id = null;
 }
 function albumEntry() {
@@ -36,6 +35,21 @@ function albumEntry() {
 
 //Functions ---------------------------------------------------------------------
 
+//binary search array
+function binSearch(array, comp) {
+	var min = 0, max = array.length - 1;
+	var index, result, match = false;
+	do {
+		index = Math.floor((max+min)/2);
+		result = comp(array[index]);
+		if(result == 1) max = index - 1;
+		if(result == -1) min = index + 1;
+	} while(result != 0 && max >= min);
+	if(result == 0) match = true;
+	return {index:index, match:match};
+}
+
+// Add file to DB
 function processFile(scanResult, currentFileIndex, settings, sql, callback) {
 	var current = scanResult[currentFileIndex];
 	// Get metadata using ffprobe
@@ -54,7 +68,11 @@ function processFile(scanResult, currentFileIndex, settings, sql, callback) {
 			// Parse ffprobe output
 			var probeOutput = JSON.parse(ffprobeOut);
 			var probeStream = probeOutput.streams[0];
-			var probeTags = probeOutput.format.tags;
+			var unparsedTags = probeOutput.format.tags;
+			var probeTags = {};
+			for (var key in unparsedTags) {
+				probeTags[key.toLowerCase()] = unparsedTags[key];
+            }
 			var albumID = crc.crc32(probeTags.album + fsPath.dirname(current.path));
 			var musicMeta = new musicEntry();
 			var albumMeta = new albumEntry();
@@ -69,11 +87,10 @@ function processFile(scanResult, currentFileIndex, settings, sql, callback) {
 			if(probeTags.track)				musicMeta.track = parseInt(probeTags.track.replace(/(?=\/)(.*)/i, ''), 10);
 			// NOTE: ffprobe outputs 'disc' instead of 'disk'!
 			if(probeTags.disc)				musicMeta.disk = parseInt(probeTags.disc.replace(/(?=\/)(.*)/i, ''), 10);
-			musicMeta.albumId = albumID;
 			musicMeta.id = current.id;
 			// Check for existing album info
 			var albumExists = null;
-			sql.query("SELECT 1=1 FROM album WHERE albumId=?", [albumID])
+			sql.query("SELECT album_id FROM album WHERE albumId=?", [albumID])
 			.on('result', function(result) {
 				result.on('error', function(err) {console.error(err);})
 				.on('row', function(row) {albumExists = row;});
@@ -100,16 +117,20 @@ function processFile(scanResult, currentFileIndex, settings, sql, callback) {
 						}
 						sql.query("INSERT INTO album (albumId, album, genre, image) "
 								+ "VALUES (:albumId, :album, :genre, x:image)", albumMeta);
-						AddFile();
+						sql.query("SELECT album_id FROM album WHERE albumId=?", [albumID])
+						.on('result', function(result) {
+							result.on('error', function(err) {console.error(err);})
+							.on('row', function(row) {AddFile(row.album_id);});
+						});
 					});
 				} else {
-					AddFile();
+					AddFile(albumExists.album_id);
 				}
-				function AddFile() {
+				function AddFile(album_id) {
 					// Add file to database
 					console.log("[SQL] Add File #"+ (scanResult.length - currentFileIndex) +": "+ fsPath.basename(current.path));
-					sql.query("INSERT INTO music (file, title, artist, codec, format, bitRate, sampleRate, track, disk, albumId, id) "
-							+ "VALUES (:file, :title, :artist, :codec, :format, :bitRate, :sampleRate, :track, :disk, :albumId, :id)", musicMeta);
+					sql.query("INSERT INTO music (file, title, artist, codec, format, bitRate, sampleRate, track, disk, id, album_id) "
+							+ "SELECT :file, :title, :artist, :codec, :format, :bitRate, :sampleRate, :track, :disk, :id, "+ album_id, musicMeta);
 					NextFile();
 				}
 			});
@@ -190,28 +211,30 @@ exports.update = function(settings) {
 				// determine unchanged entries
 				for (var i = 0; i < scanResult.length; i++) {
 					if(idList.length > 0) {
-						// binary search [idList] to find duplicate entries
+						// search [idList] to find duplicate entries
 						var target = parseInt(scanResult[i].id, 16);
-						var min = 0, max = idList.length - 1;
-						var index = Math.floor((max+min)/2);
-						while(target != parseInt(idList[index].id, 16) && max > min) {
-							if(target > parseInt(idList[index].id, 16)) min = index + 1;
-							else if(target < parseInt(idList[index].id, 16)) max = index - 1;
-							index = Math.floor((max+min)/2);
-						}
-						if(target == parseInt(idList[index].id, 16)) {
+						var result = binSearch(idList, function(a) {
+							var value = parseInt(a.id, 16);
+							if(value > target) return 1;
+							if(value < target) return -1;
+							return 0;
+                        });
+						if(result.match) {
 							scanResult.splice(i, 1);
-							idList.splice(index, 1);
+							idList.splice(result.index, 1);
 							i--;
 						}
 					}
 				}
 				// Delete Entries
+				sql.query("SET FOREIGN_KEY_CHECKS = 0");
 				while(idList.length > 0) {
 					console.log('Delete Entry #'+ idList.length +': '+ idList[idList.length - 1].id);
-					sql.query("DELETE FROM music WHERE id = ?", [idList[idList.length - 1].id]);
+					sql.query("DELETE music,album FROM music LEFT JOIN album ON music.album_id = album.album_id" +
+							" WHERE id = ?", [idList[idList.length - 1].id]);
 					idList.pop();
 				}
+				sql.query("SET FOREIGN_KEY_CHECKS = 1");
 				if(scanResult.length > 0) {
 					// Process files
 					processFile(scanResult, scanResult.length - 1, settings, sql, function() {
@@ -255,13 +278,16 @@ exports.build = function (settings) {
 		sql.query("DROP TABLE IF EXISTS music");
 		sql.query("DROP TABLE IF EXISTS album");
 		sql.query("CREATE TABLE album (" +
-				"albumId	CHAR(8) NOT NULL PRIMARY KEY," +
+				"album_id	MEDIUMINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY," +
+				"albumId	CHAR(8)," +
 				"album		VARCHAR(255)," +
 				"genre		VARCHAR(255)," +
 				"image		MEDIUMBLOB )" +
 		"CHARACTER SET 'utf8'");
 		sql.query("CREATE TABLE music (" +
-				"file		VARCHAR(255) UNIQUE," +
+				"music_id	MEDIUMINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY," +
+				"album_id	MEDIUMINT UNSIGNED NOT NULL," +
+				"file		VARCHAR(255)," +
 				"title		VARCHAR(255)," +
 				"artist		VARCHAR(255)," +
 				"codec		VARCHAR(255)," +
@@ -270,9 +296,8 @@ exports.build = function (settings) {
 				"sampleRate	MEDIUMINT UNSIGNED," +
 				"track		TINYINT UNSIGNED," +
 				"disk		TINYINT UNSIGNED," +
-				"albumId	CHAR(8)," +
-				"id			CHAR(8) NOT NULL PRIMARY KEY," +
-				"CONSTRAINT fk_albumId FOREIGN KEY (albumId) REFERENCES album(albumId) )" +
+				"id			CHAR(8)," +
+				"CONSTRAINT fk_album_id FOREIGN KEY (album_id) REFERENCES album(album_id) )" +
 		"CHARACTER SET 'utf8'");
 		// start searching filesystem for audio files...
 		console.log('[FS] Search Begin...');

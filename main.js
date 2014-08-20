@@ -163,7 +163,7 @@ sql.on('error', function(err) {
 				logger.write('('+ new Date().toString() +') '+'[Socket] Download album: '+ albumId +'\n');
 				dlPreparing = true;
 				var files = [];
-				sql.query("SELECT file FROM music WHERE albumId=?", [albumId])
+				sql.query("SELECT file FROM music WHERE album_id = (SELECT album_id FROM album WHERE albumId=?)", [albumId])
 				.on('result', function(res) {
 					res.on('row', function(row) {
 						files.push(row.file);
@@ -199,7 +199,7 @@ sql.on('error', function(err) {
 			var packet = [];
 			packet.push(id);
 			sql.query("SELECT track,disk,title,artist,id FROM music " +
-					"WHERE albumId = (SELECT albumId FROM music WHERE id=? LIMIT 1) ORDER BY track", [id])
+					"WHERE album_id = (SELECT album_id FROM music WHERE id=? LIMIT 1) ORDER BY track", [id])
 			.on('result', function(res) {
 				res.on('row', function(row) {
 					packet.push(row);
@@ -214,7 +214,7 @@ sql.on('error', function(err) {
 		});
 		// Prepare audio file for playback
 		socket.on("request track", function(id) {
-			sql.query("SELECT * FROM music LEFT JOIN album ON music.albumId = album.albumId WHERE id=?", [id])
+			sql.query("SELECT * FROM music LEFT JOIN album ON music.album_id = album.album_id WHERE id=?", [id])
 			.on('result', function(res) {
 				res.on('error', function(err) {
 					logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
@@ -254,14 +254,13 @@ sql.on('error', function(err) {
 			var query, msg = '"'+ search +'"';
 			if(genreFilter) {
 				genreFilter = genreFilter[0].replace(/:\s$/i, '');
-				query = "SELECT album,albumId FROM album WHERE genre LIKE :genre AND " +
-				"(album LIKE :search OR albumId=(SELECT albumId FROM music WHERE " +
-				"title LIKE :search OR artist LIKE :search)) ORDER BY album";
+				query = "SELECT DISTINCT album,albumId FROM music LEFT JOIN album ON music.album_id = album.album_id " +
+				"WHERE genre LIKE :genre AND (album LIKE :search OR title LIKE :search OR artist LIKE :search) " +
+				"ORDER BY album";
 				msg += ' in "'+ genreFilter +'"';
 			} else {
-				query = "SELECT album,albumId FROM album WHERE album LIKE :search OR " +
-				"albumId=(SELECT albumId FROM music WHERE title LIKE :search OR artist LIKE :search) " +
-				"ORDER BY album";
+				query = "SELECT DISTINCT album,albumId FROM music LEFT JOIN album ON music.album_id = album.album_id " +
+				"WHERE album LIKE :search OR title LIKE :search OR artist LIKE :search ORDER BY album";
 			}
 			logger.write('('+ new Date().toString() +') '+'[Socket] Search: '+ msg +'\n');
 			var result = [];
@@ -301,8 +300,8 @@ sql.on('error', function(err) {
 					logger.write('('+ new Date().toString() +') '+JSON.stringify(err) +'\n');
 				})
 			});
-			var query = "SELECT title,artist,track,disk,id FROM music WHERE albumId = :albumId " +
-			"AND (title LIKE :filter OR artist LIKE :filter) ORDER BY track";
+			var query = "SELECT title,artist,track,disk,id FROM music LEFT JOIN album ON music.album_id = album.album_id " +
+			"WHERE albumId = :albumId AND (album LIKE :filter OR title LIKE :filter OR artist LIKE :filter) ORDER BY track";
 			sql.query(query, {
 				albumId: albumID,
 				filter: '%'+activeFilters+'%'

@@ -196,11 +196,6 @@ function PlaySong(id, title) {
 	if(!requestingSong) {
 		requestingSong = true;
 		consolePrintln('[Log] Requesting Song: <span style="color:#8FF;">'+ title +'</span>');
-		YUI().use('node', function(Y) {
-			var active = Y.one('.track-active')
-			if(active) active.removeClass('track-active');
-			Y.one('#t-'+id).addClass('track-active');
-		});
 		socket.emit('request playlist', id);
 		socket.emit('request track', id);
 	}

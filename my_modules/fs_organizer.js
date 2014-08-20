@@ -28,7 +28,7 @@ exports.organize = function(settings, outDir) {
 	})
 	.on('connect', function() {
 		var fileList = [];
-		sql.query("SELECT file,genre,album,disk,track,title,id FROM music LEFT JOIN album ON music.albumId = album.albumId")
+		sql.query("SELECT file,genre,album,disk,track,title,id FROM music LEFT JOIN album ON music.album_id = album.album_id")
 		.on('result', function(result) {
 			result.on('error', function(err) {
 				console.error(err);
@@ -38,7 +38,7 @@ exports.organize = function(settings, outDir) {
 			});
 		})
 		.on('end', function() {
-			sql.query("ALTER TABLE music DROP FOREIGN KEY fk_albumId");
+			sql.query("SET FOREIGN_KEY_CHECKS = 0");
 			console.log('Move '+ fileList.length +' files...')
 			for (var i = 0; i < fileList.length; i++) {
 				var current = fileList[i];
@@ -54,8 +54,8 @@ exports.organize = function(settings, outDir) {
 						var albumId = crc.crc32(current.album + path.dirname(outPath));
 						var trackId = crc.crc32(outPath);
 						
-						sql.query("UPDATE music LEFT JOIN album ON music.albumId = album.albumId " +
-								"SET id=:id, file=:outFile, album.albumId=:albumId, music.albumId=:albumId WHERE id=:oldID", {
+						sql.query("UPDATE music LEFT JOIN album ON music.album_id = album.album_id " +
+								"SET id=:id, file=:outFile, albumId=:albumId WHERE id=:oldID", {
 							id: trackId,
 							albumId: albumId,
 							outFile: outPath.replace(/\'/g, "\'"),
@@ -67,7 +67,7 @@ exports.organize = function(settings, outDir) {
 				}
 			}
 			console.log('Updating database...');
-			sql.query("ALTER TABLE music ADD CONSTRAINT fk_albumId FOREIGN KEY (albumId) REFERENCES album(albumId)");
+			sql.query("SET FOREIGN_KEY_CHECKS = 1");
 			sql.end();
 		});	
 	});
