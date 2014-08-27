@@ -18,8 +18,7 @@ Example settings.json content:<br />
 	"httpPort": "39564",
 	"musicDir": "/path/to/music/",
 	"logPath": "./yui.log",
-	"imgPath": "./img/_default.jpg",
-	"imgDir": "./img/",
+	"imgPath": "./default.jpg",
 	"client": {
 		"allowDownload": "yes",
 		"hostname": "localhost",
@@ -39,7 +38,6 @@ Example settings.json content:<br />
 }
 ```
 `imgPath` is the path to the default album image used by the player.<br />
-`imgDir` is where all the album artwork will be stored.<br />
 `client.hostname` is a hostname that will be displayed in the client interface, input empty string to disable feature.<br />
 `client.defaultGenre` music of this genre will be loaded to clients on connect, this prevents long loading times. Input empty string to load all music on connection.<br />
 `db` configures the database connection, `db.db` and `db.username` must be created on the server beforehand.<br />
